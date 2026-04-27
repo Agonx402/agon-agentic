@@ -1,0 +1,29 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.agonx402/agon-gateway",
+  "description": "MCP server for discovering and calling Agon Gateway x402, Helius Wallet, and Tokens API routes.",
+  "repository": {
+    "url": "https://github.com/Agonx402/agon-gateway-agentic",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@agonx402/gateway-mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "description": "Optional Agon Gateway base URL. Defaults to https://gateway.agonx402.com.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "AGON_GATEWAY_BASE_URL"
+        }
+      ]
+    }
+  ]
+}

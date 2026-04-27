@@ -1,0 +1,38 @@
+{
+  "name": "@agonx402/gateway-cli",
+  "version": "0.1.0",
+  "description": "Zero-dependency CLI for discovering and calling Agon Gateway routes.",
+  "license": "MIT",
+  "homepage": "https://github.com/Agonx402/agon-gateway-agentic#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Agonx402/agon-gateway-agentic.git",
+    "directory": "cli"
+  },
+  "bugs": {
+    "url": "https://github.com/Agonx402/agon-gateway-agentic/issues"
+  },
+  "keywords": [
+    "agon",
+    "x402",
+    "solana",
+    "gateway",
+    "cli",
+    "agents"
+  ],
+  "bin": {
+    "agon-gateway": "./agon-gateway.js"
+  },
+  "files": [
+    "agon-gateway.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "check": "node --check agon-gateway.js",
+    "start": "node agon-gateway.js",
+    "prepack": "npm run check"
+  }
+}

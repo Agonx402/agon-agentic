@@ -1,0 +1,153 @@
+# Agon Gateway for AI Agents
+
+Agon Gateway is an x402-ready gateway for Solana data. Use it when an agent needs paid Solana RPC, paid Solana DAS, paid Helius Wallet intelligence, or wallet-authenticated Tokens API data without asking the end user for upstream provider API keys.
+
+Base URL:
+
+```text
+https://gateway.agonx402.com
+```
+
+Start every integration by fetching the live catalog:
+
+```http
+GET /v1/catalog
+GET /v1/catalog?provider=alchemy
+GET /v1/catalog?provider=helius
+GET /v1/catalog?provider=tokens
+```
+
+The catalog is the source of truth. Each route entry includes `path`, `httpMethod`, `provider`, `surface`, `method`, `description`, `accessMode`, `paymentRequired`, optional `priceUsd`, input schemas, examples, output schemas, path-param schemas, payment network, and payment asset metadata.
+
+Access modes:
+
+- `exact`: standard x402 exact-payment flow. Used by Solana RPC, Solana DAS, and Helius Wallet routes. First request must include the final method, URL, query, and JSON body being purchased. On `402 Payment Required`, create the x402 payment with the agent wallet/payment layer, then retry the exact same request with `PAYMENT-SIGNATURE` or `X-PAYMENT`.
+- `siwx`: sign-in-with-x wallet authentication. Used by Tokens API routes. No payment is required, but a wallet signature is required. On `402 Payment Required`, sign the SIWX challenge and retry with `SIGN-IN-WITH-X`.
+
+Do not empty-probe exact-payment POST routes. The payment challenge must commit to the final JSON body. Empty probes are only safe for free/auth-only routes or routes whose catalog schema requires no input.
+
+Core public routes:
+
+- `GET /healthz`
+- `GET /v1/catalog`
+- `POST /v1/x402/solana/{cluster}/{provider}/{surface}/{method}`
+- `GET /v1/x402/helius/wallet/...`
+- `POST /v1/x402/helius/wallet/batch-identity`
+- `GET /v1/x402/helius/devnet/wallet/...`
+- `POST /v1/x402/helius/devnet/wallet/batch-identity`
+- `GET /v1/x402/tokens/...`
+- `POST /v1/x402/tokens/assets/market-snapshots`
+
+Clusters:
+
+- `mainnet`
+- `devnet`
+
+Providers:
+
+- `alchemy`
+- `helius`
+- `tokens`
+
+Solana RPC methods:
+
+- `getBalance`
+- `getAccountInfo`
+- `getTransaction`
+- `getSignaturesForAddress`
+- `getTokenAccountsByOwner`
+- `getProgramAccounts`
+- `getTransactionsForAddress` (Helius only)
+
+Solana RPC request body:
+
+```json
+{ "params": ["<json-rpc positional params>"] }
+```
+
+Solana DAS methods:
+
+- `getAsset`
+- `getAssetsByOwner`
+- `searchAssets`
+
+Solana DAS request body:
+
+```json
+{ "params": { "id": "<asset-id>" } }
+```
+
+Helius Wallet routes:
+
+- `GET /v1/x402/helius/wallet/identity/:wallet`
+- `POST /v1/x402/helius/wallet/batch-identity`
+- `GET /v1/x402/helius/wallet/balances/:wallet`
+- `GET /v1/x402/helius/wallet/history/:wallet`
+- `GET /v1/x402/helius/wallet/transfers/:wallet`
+- `GET /v1/x402/helius/wallet/funded-by/:wallet`
+- Devnet equivalents are under `/v1/x402/helius/devnet/wallet/...`
+
+The `:wallet` path param accepts a base58 Solana address, an SNS `.sol` name, or supported ANS custom TLD. Domain resolution is mainnet-only.
+
+Tokens API routes use SIWX and include:
+
+- `GET /v1/x402/tokens/health`
+- `GET /v1/x402/tokens/assets/search?q=solana&limit=5`
+- `GET /v1/x402/tokens/assets/resolve?ref=solana`
+- `GET /v1/x402/tokens/assets/curated?list=majors&groupBy=asset`
+- `POST /v1/x402/tokens/assets/market-snapshots`
+- `GET /v1/x402/tokens/assets/:assetId`
+- `GET /v1/x402/tokens/assets/:assetId/profile`
+- `GET /v1/x402/tokens/assets/:assetId/markets`
+- `GET /v1/x402/tokens/assets/:assetId/ohlcv`
+- `GET /v1/x402/tokens/assets/:assetId/risk-summary`
+- `GET /v1/x402/tokens/assets/:assetId/risk-details`
+
+Common examples:
+
+```bash
+curl https://gateway.agonx402.com/v1/catalog?provider=helius
+curl -X POST https://gateway.agonx402.com/v1/x402/solana/mainnet/helius/rpc/getBalance \
+  -H "content-type: application/json" \
+  -d '{"params":["11111111111111111111111111111111"]}'
+curl "https://gateway.agonx402.com/v1/x402/tokens/assets/search?q=solana&limit=5" \
+  -H "SIGN-IN-WITH-X: <signed-siwx-payload>"
+```
+
+Response shape for successful route calls:
+
+```json
+{
+  "ok": true,
+  "provider": "helius",
+  "cluster": "mainnet",
+  "surface": "rpc",
+  "method": "getBalance",
+  "priceUsd": "0.000605",
+  "paymentNetwork": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
+  "result": {}
+}
+```
+
+Safety limits:
+
+- Unpaid challenges are rate limited.
+- RPC routes are rate limited by provider.
+- DAS routes are rate limited more tightly than RPC routes.
+- Tokens routes are SIWX-authenticated and capped against a shared upstream API key.
+- `getProgramAccounts` requires at least one filter and `dataSlice.length <= 256`.
+- Paginated list methods cap `limit`; read catalog schemas before sending broad requests.
+- Tokens `market-snapshots` accepts up to 250 ids.
+- Tokens `variant-markets` accepts up to 50 ids.
+
+Never expose or call internal facilitator routes from public clients:
+
+- `/api/internal/facilitator/supported`
+- `/api/internal/facilitator/verify`
+- `/api/internal/facilitator/settle`
+
+Local agent tooling in this repository:
+
+- CLI: `node agentic/cli/agon-gateway.js`
+- MCP server: `node agentic/mcp/server.js`
+- Skill: `agentic/skills/agon-gateway`

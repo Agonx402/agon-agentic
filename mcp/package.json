@@ -1,0 +1,42 @@
+{
+  "name": "@agonx402/gateway-mcp",
+  "version": "0.1.0",
+  "description": "Zero-dependency MCP server for Agon Gateway discovery and calls.",
+  "license": "MIT",
+  "mcpName": "io.github.agonx402/agon-gateway",
+  "homepage": "https://github.com/Agonx402/agon-gateway-agentic#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Agonx402/agon-gateway-agentic.git",
+    "directory": "mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/Agonx402/agon-gateway-agentic/issues"
+  },
+  "keywords": [
+    "agon",
+    "x402",
+    "solana",
+    "gateway",
+    "mcp",
+    "model-context-protocol",
+    "agents"
+  ],
+  "bin": {
+    "agon-gateway-mcp": "./server.js"
+  },
+  "files": [
+    "server.js",
+    "llm.txt",
+    "server.json",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "check": "node --check server.js",
+    "start": "node server.js",
+    "prepack": "npm run check"
+  }
+}
