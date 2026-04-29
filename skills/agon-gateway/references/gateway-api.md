@@ -42,7 +42,7 @@ Tokens routes are wallet-authenticated and `paymentRequired: false`.
 
 ## Agon Channel Route Flow
 
-Use for `/v1/agon-channel/...` routes discovered from `GET /v1/catalog`.
+Use for devnet-only `/v1/agon-channel/...` routes discovered from `GET /v1/catalog`.
 
 1. Select a catalog route with `accessMode: "agon-channel"`.
 2. Read `priceTokenAmount`, `tokenMint`, `tokenId`, `programId`, `merchantOwner`, `merchantParticipantId`, and `messageDomain` from route metadata.
@@ -50,7 +50,7 @@ Use for `/v1/agon-channel/...` routes discovered from `GET /v1/catalog`.
 4. Sign the exact Agon message bytes with the channel authorized signer.
 5. Send the final API request with `X-Agon-Request-Id` and `AGON-COMMITMENT`.
 
-Do not use x402 payment headers for channel routes. Tokens SIWX routes remain free/authenticated and do not use payment channels.
+Do not use x402 payment headers for channel routes. Tokens SIWX routes and mainnet RPC/DAS/Wallet routes do not use payment channels in v1.
 
 ## Solana RPC Routes
 
@@ -149,6 +149,17 @@ GET  /v1/x402/helius/devnet/wallet/transfers/:wallet
 GET  /v1/x402/helius/devnet/wallet/funded-by/:wallet
 ```
 
+Channel-backed devnet path family:
+
+```text
+GET  /v1/agon-channel/helius/devnet/wallet/identity/:wallet
+POST /v1/agon-channel/helius/devnet/wallet/batch-identity
+GET  /v1/agon-channel/helius/devnet/wallet/balances/:wallet
+GET  /v1/agon-channel/helius/devnet/wallet/history/:wallet
+GET  /v1/agon-channel/helius/devnet/wallet/transfers/:wallet
+GET  /v1/agon-channel/helius/devnet/wallet/funded-by/:wallet
+```
+
 The `:wallet` value accepts a base58 Solana address, SNS `.sol`, or supported ANS-style domain. Domain resolution is mainnet-only.
 
 Examples:
@@ -156,6 +167,7 @@ Examples:
 ```bash
 node agentic/cli/agon-gateway.js wallet balances GQUtvPx89ZNCwmvQqFmH59bJcU8fW8siETpaxod7Aydz --query limit=25 --query showNative=true
 node agentic/cli/agon-gateway.js wallet batch-identity '["GQUtvPx89ZNCwmvQqFmH59bJcU8fW8siETpaxod7Aydz","toly.sol"]'
+node agentic/cli/agon-gateway.js wallet balances GQUtvPx89ZNCwmvQqFmH59bJcU8fW8siETpaxod7Aydz --cluster devnet --access-mode agon-channel --header 'X-Agon-Request-Id:<id>' --header 'AGON-COMMITMENT:<envelope>'
 ```
 
 ## Tokens API Routes
@@ -196,9 +208,9 @@ Batch limits:
 - `market-snapshots`: max 250 `mints` plus `addresses`
 - `variant-markets`: max 50 comma-separated `mints` plus `addresses`
 
-## Internal Routes
+## Private Routes
 
-Internal server-to-server facilitator endpoints are intentionally omitted from this public skill reference. Do not infer, expose, or call private gateway routes from public clients; use `GET /v1/catalog` and documented `/v1/...` routes only.
+Do not infer, expose, or call private gateway routes from public clients; use `GET /v1/catalog` and documented `/v1/...` routes only.
 
 ## Agentic CLI
 
@@ -211,6 +223,11 @@ node agentic/cli/agon-gateway.js health
 node agentic/cli/agon-gateway.js catalog --provider tokens
 node agentic/cli/agon-gateway.js routes --provider helius --surface wallet
 node agentic/cli/agon-gateway.js show getBalance --provider helius
+node agentic/cli/agon-gateway.js agent-prompt
+node agentic/cli/agon-gateway.js schema
+node agentic/cli/agon-gateway.js doctor
+node agentic/cli/agon-gateway.js auth prepare GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1 --json
+node agentic/cli/agon-gateway.js auth call GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1 --auth-driver my-wallet-auth-driver
 node agentic/cli/agon-gateway.js call GET /v1/x402/tokens/health --siwx "$SIGN_IN_WITH_X"
 ```
 
@@ -220,6 +237,30 @@ Header flags:
 - `--x-payment <value>` adds `X-PAYMENT`
 - `--siwx <value>` adds `SIGN-IN-WITH-X`
 - `--header Name:Value` adds custom headers
+
+Wallet-agnostic auth helpers:
+
+- `auth prepare <METHOD> <PATH>` returns an auth request JSON object with `accessMode`, final URL/query/body hash, catalog route metadata, and decoded challenge details when available.
+- `auth complete --challenge FILE --address ADDRESS --signature SIGNATURE` creates a `SIGN-IN-WITH-X` header from a prepared SIWX challenge.
+- `auth call <METHOD> <PATH> --auth-driver COMMAND` sends the auth request JSON to the driver on stdin and expects JSON on stdout.
+
+Auth drivers must return one of:
+
+```json
+{ "headers": { "SIGN-IN-WITH-X": "..." } }
+```
+
+```json
+{ "headers": { "X-PAYMENT": "..." } }
+```
+
+```json
+{ "headers": { "X-Agon-Request-Id": "...", "AGON-COMMITMENT": "..." } }
+```
+
+For SIWX, drivers may instead return `{ "address": "...", "signature": "...", "signatureEncoding": "hex|base58|base64|base64url", "chainId": "solana:..." }`; the CLI will encode `SIGN-IN-WITH-X`.
+
+Do not make auth drivers wallet-specific in public docs. Drivers can wrap any local wallet, custody wallet, browser wallet bridge, MPC service, x402 payer, or Agon channel commitment builder.
 
 ## Agentic MCP Server
 
@@ -235,6 +276,11 @@ Tools:
 - `agon_gateway_catalog`
 - `agon_gateway_find_route`
 - `agon_gateway_prepare_solana`
+- `agon_gateway_prepare_wallet`
 - `agon_gateway_call`
+- `agon_gateway_prepare_auth`
+- `agon_gateway_complete_siwx`
+- `agon_gateway_call_with_headers`
 
 The MCP server exposes `agon://gateway/llm.txt` as a resource.
+MCP never executes local auth-driver commands. The host should use its own wallet/payment layer and pass produced headers back with `agon_gateway_call_with_headers`.

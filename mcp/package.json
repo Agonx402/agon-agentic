@@ -1,6 +1,6 @@
 {
     "name": "@agonx402/gateway-mcp",
-    "version": "0.1.3",
+    "version": "0.1.5",
     "description": "Zero-dependency MCP server for Agon Gateway discovery and calls.",
     "license": "MIT",
     "mcpName": "io.github.Agonx402/agon-gateway",

@@ -7,9 +7,9 @@ description: Use when integrating Agon Gateway with Agon Protocol payment channe
 
 ## Overview
 
-Use this skill for gateway routes with `accessMode: "agon-channel"`. These routes authorize API calls against locked Agon channel collateral and merchant-tracked unsettled cumulative commitments.
+Use this skill for gateway devnet routes with `accessMode: "agon-channel"`. These routes authorize API calls against locked Agon channel collateral and merchant-tracked unsettled cumulative commitments.
 
-Tokens SIWX routes stay free/authenticated and do not use payment channels.
+Tokens SIWX routes stay free/authenticated and do not use payment channels. Mainnet RPC/DAS/Wallet routes also do not use Agon payment channels in v1.
 
 ## Token Policy
 
@@ -36,6 +36,14 @@ Never use synthetic stablecoin names for gateway-channel examples.
 X-Agon-Request-Id: <stable idempotency id>
 AGON-COMMITMENT: <base64 JSON commitment envelope>
 ```
+
+The gateway CLI can prepare the route metadata for a channel request:
+
+```bash
+node agentic/cli/agon-gateway.js auth prepare GET /v1/agon-channel/helius/devnet/wallet/balances/<wallet> --query limit=25 --json
+```
+
+For one-command calls, provide a wallet-agnostic auth driver that returns `X-Agon-Request-Id` and `AGON-COMMITMENT`. The driver can use any wallet or custody layer; it does not need to be tied to a specific wallet standard.
 
 ## Gateway Authorization
 

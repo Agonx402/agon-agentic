@@ -1,3 +1,190 @@
 # Agon Protocol
 
-See `llm.txt`. This package exposes the same content as MCP resource `agon://protocol/llm.txt`.
+Agon Protocol is a Solana payment-channel and clearing protocol. Agents should use `@agonx402/sdk` for account derivation, message bytes, commitment verification, headroom math, and settlement preparation.
+
+## Live devnet
+
+```text
+programId: 3UyUFeNsUYPpM6hMRf7H8wg3MKEXQ82rqnsXhZrUwgSD
+chainId: 1
+messageDomain: a58a109a38f14cc27ef174135176cab3
+officialDevnetUsdcMint: 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU
+participantWithdrawals: instant
+unilateralChannelUnlock: 72 hours
+cooperativeChannelUnlock: immediate
+```
+
+Resolve official devnet USDC `token_id` from `TokenRegistry`, deployment config, or `AGON_PROTOCOL_DEVNET_USDC_TOKEN_ID`. Do not hardcode demo token IDs or use synthetic stablecoin names.
+
+## Agent guardrails
+
+- Protocol CLI/MCP tools are read + prepare only.
+- Do not ask protocol tools to sign, store private keys, or broadcast.
+- Wallet layers sign and submit prepared transactions/messages.
+- Tokens SIWX routes do not use payment channels.
+- Gateway-channel v1 uses official devnet USDC and bundle settlement.
+- Verify cumulative commitments against exact Agon message bytes.
+
+## Core accounts
+
+- `GlobalConfig`: authority, fees, chain ID, message domain, timing policy.
+- `TokenRegistry`: allowlisted settlement tokens by `token_id`.
+- `ParticipantAccount`: stable `participant_id`, owner, token balances, withdrawal state, inbound channel policy, optional BLS key.
+- `ChannelState`: directed payer-to-payee channel for one token, settled cumulative, locked collateral, pending unlock, authorized signer.
+- `vault-token-account`: program-owned SPL token account for one registered token.
+
+## Instruction map
+
+Admin and registry:
+
+- `initialize`: create `GlobalConfig`.
+- `update_config`: update mutable protocol config; cannot change chain ID or message domain.
+- `accept_config_authority`: pending config authority accepts handoff.
+- `initialize_token_registry`: create token registry.
+- `register_token`: allowlist a settlement token and vault.
+- `update_registry_authority`: nominate new registry authority.
+- `accept_registry_authority`: pending registry authority accepts handoff.
+
+Participant:
+
+- `initialize_participant`: create durable participant identity.
+- `register_participant_bls_key`: register one Agon BLS key for clearing rounds; no rotation path yet.
+- `update_inbound_channel_policy`: permissionless, consent-required, or disabled inbound channel creation.
+
+Funds:
+
+- `deposit`: deposit registered SPL tokens for signer participant.
+- `deposit_for`: batch deposit for multiple participants.
+- `request_withdrawal`: move available balance into withdrawal state.
+- `cancel_withdrawal`: cancel pending withdrawal.
+- `execute_withdrawal_timelocked`: transfer pending withdrawal to destination after delay; live devnet delay is zero.
+
+Channels:
+
+- `create_channel`: create permanent directed `(payer_id, payee_id, token_id)` channel.
+- `lock_channel_funds`: lock participant balance as channel collateral.
+- `request_unlock_channel_funds`: start 72-hour unilateral collateral unlock.
+- `execute_unlock_channel_funds`: finalize unilateral unlock after delay.
+- `cooperative_unlock_channel_funds`: immediately unlock with payer and payee consent.
+- `request_update_channel_authorized_signer`: start timelocked signer rotation.
+- `execute_update_channel_authorized_signer`: finalize signer rotation.
+
+Settlement:
+
+- `settle_individual`: settle one signed cumulative `agon-cmt-v5` commitment.
+- `settle_commitment_bundle`: settle many signed cumulative commitments for one payee; use for gateway request settlement.
+- `settle_clearing_round`: settle an Agon-specific BLS cooperative clearing round; do not use for gateway request settlement v1.
+
+## SDK usage
+
+```ts
+import * as anchor from "@coral-xyz/anchor";
+import {
+  AgonClient,
+  AGON_CHAIN_IDS,
+  AGON_PROTOCOL_PROGRAM_ID,
+  OFFICIAL_DEVNET_USDC_MINT,
+  buildGatewayCommitmentPayload,
+  calculateChannelHeadroom,
+  createCommitmentMessage,
+  createEd25519Instruction,
+  createGatewayCommitmentMessage,
+  createMultiMessageEd25519Instruction,
+  deriveMessageDomain,
+  encodeGatewayCommitmentEnvelope,
+  nextCommitmentAmount,
+  prepareCommitmentBundleSettlementPlan,
+  resolveCanonicalDevnetUsdcToken,
+  verifyGatewayCommitmentEnvelope,
+} from "@agonx402/sdk";
+
+const provider = anchor.AnchorProvider.env();
+const client = new AgonClient({ provider, programId: AGON_PROTOCOL_PROGRAM_ID });
+```
+
+Read:
+
+```ts
+const config = await client.fetchGlobalConfig();
+const registry = await client.fetchTokenRegistry();
+const participant = await client.fetchParticipant(owner);
+const channel = await client.fetchChannel({ channelState });
+const usdc = resolveCanonicalDevnetUsdcToken({ registry, env: process.env });
+```
+
+Prepare common transactions with `AgonClient` or with the read-only `agon_protocol_prepare_action` MCP tool / `agon-protocol prepare <flow>` CLI command:
+
+- `initializeParticipant`
+- `createChannel`
+- `deposit`
+- `lockChannelFunds`
+- `requestUnlockChannelFunds`
+- `executeUnlockChannelFunds`
+- `requestWithdrawal`
+- `executeWithdrawalTimelocked`
+- `cancelWithdrawal`
+- `updateInboundChannelPolicy`
+- `settleIndividual`
+- `settleCommitmentBundle`
+- `settleClearingRound`
+- `initializeProtocol`
+- `registerToken`
+
+Use `client.program.methods.<instructionName>(...)` for generated IDL methods not wrapped by a convenience helper, including cooperative unlock, signer rotation, BLS key registration, registry authority handoff, and config updates.
+
+Protocol MCP tools:
+
+- `agon_protocol_config`
+- `agon_protocol_token`
+- `agon_protocol_participant`
+- `agon_protocol_channel`
+- `agon_protocol_headroom`
+- `agon_protocol_clearing_preview`
+- `agon_protocol_prepare_action`
+- `agon_protocol_prepare_gateway_commitment`
+- `agon_protocol_verify_gateway_commitment`
+
+## Cumulative commitments
+
+`agon-cmt-v5` is cumulative. A commitment for amount `X` means the channel is authorized up to total `X`, not that `X` should be paid again.
+
+```ts
+const messageDomain = deriveMessageDomain(client.programId, AGON_CHAIN_IDS.devnet);
+const channel = await client.fetchChannel({ channelState });
+const committedAmount = nextCommitmentAmount(channel, routePriceTokenAmount);
+
+const message = createCommitmentMessage({
+  messageDomain,
+  payerId,
+  payeeId,
+  tokenId,
+  committedAmount,
+});
+
+const ed25519Ix = createEd25519Instruction(authorizedSignerKeypair, message);
+```
+
+## Gateway channel payment
+
+Headroom:
+
+```text
+effectiveLocked = max(0, lockedBalance - pendingUnlockAmount)
+maxAuthorized = settledCumulative + effectiveLocked
+remainingHeadroom = max(0, maxAuthorized - latestAcceptedCommitted)
+```
+
+Gateway request contract:
+
+```text
+X-Agon-Request-Id: <stable idempotency key>
+AGON-COMMITMENT: <base64 JSON envelope>
+```
+
+The new cumulative amount must equal `latestAcceptedCommitted + priceTokenAmount` and must not exceed `settledCumulative + effectiveLocked`.
+
+## BLS caveats
+
+Agon BLS v1 is Agon-specific, not a generic IETF hash-to-curve BLS ciphersuite. Clients must use shared Agon implementation and test vectors.
+
+There is no BLS key rotation path yet. If a BLS key is lost or compromised, migrate to a new participant identity for future BLS clearing.

@@ -1,6 +1,6 @@
 {
   "name": "@agonx402/protocol-mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Read-only and prepare-only MCP server for Agon Protocol.",
   "license": "MIT",
   "mcpName": "io.github.Agonx402/agon-protocol",
@@ -23,6 +23,7 @@
   },
   "files": [
     "server.js",
+    "protocol-plan.js",
     "llm.txt",
     "llms.txt",
     "server.json",
@@ -37,7 +38,7 @@
     "@solana/web3.js": "^1.95.3"
   },
   "scripts": {
-    "check": "node --check server.js",
+    "check": "node --check server.js && node --check protocol-plan.js",
     "start": "node server.js",
     "prepack": "npm run check"
   }

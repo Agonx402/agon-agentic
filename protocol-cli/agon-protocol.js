@@ -4,9 +4,11 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
+const { buildClearingPreview, buildProtocolActionPlan } = require("./protocol-plan.js");
 
 const DEFAULT_RPC_URL = process.env.ANCHOR_PROVIDER_URL || process.env.SOLANA_DEVNET_RPC_URL || "https://api.devnet.solana.com";
 const DEFAULT_CLUSTER = "devnet";
+const DEFAULT_PROGRAM_ID = process.env.AGON_PROTOCOL_PROGRAM_ID || "3UyUFeNsUYPpM6hMRf7H8wg3MKEXQ82rqnsXhZrUwgSD";
 
 function usage(exitCode = 0) {
   const text = `
@@ -18,8 +20,9 @@ Usage:
   agon-protocol participant show --owner PUBKEY [--rpc-url URL] [--program-id PUBKEY]
   agon-protocol channel show --payer-id ID --payee-id ID [--token-id ID] [--rpc-url URL] [--program-id PUBKEY]
   agon-protocol channel headroom --payer-id ID --payee-id ID --latest-accepted AMOUNT [--token-id ID]
+  agon-protocol clearing preview --participants N --channels N [--token-id ID]
   agon-protocol prepare <flow> [--key value ...]
-  agon-protocol prepare gateway-commitment --program-id PUBKEY --payer-id ID --payee-id ID --committed-amount AMOUNT --signer PUBKEY [--signature BASE64]
+  agon-protocol prepare gateway-commitment --payer-id ID --payee-id ID --committed-amount AMOUNT --signer PUBKEY [--program-id PUBKEY] [--token-id ID] [--signature BASE64]
   agon-protocol verify gateway-commitment --envelope BASE64_JSON
 
 Read commands may fetch chain state. Prepare commands do not sign or broadcast.
@@ -91,19 +94,22 @@ async function loadPackage(name, localFallback) {
   try {
     return await import(name);
   } catch {
+    if (localFallback.endsWith(".cjs.js")) {
+      return require(localFallback);
+    }
     return import(pathToFileURL(localFallback).href);
   }
 }
 
 async function loadClient(flags) {
-  const [{ AgonClient, AGON_PROTOCOL_PROGRAM_ID }, anchor, web3] = await Promise.all([
+  const [{ AgonClient }, anchor, web3] = await Promise.all([
     loadSdk(),
     loadPackage("@coral-xyz/anchor", path.resolve(__dirname, "..", "..", "agon-sdk", "node_modules", "@coral-xyz", "anchor", "dist", "cjs", "index.js")),
-    loadPackage("@solana/web3.js", path.resolve(__dirname, "..", "..", "agon-sdk", "node_modules", "@solana", "web3.js", "lib", "index.esm.js")),
+    loadPackage("@solana/web3.js", path.resolve(__dirname, "..", "..", "agon-sdk", "node_modules", "@solana", "web3.js", "lib", "index.cjs.js")),
   ]);
   const programId = flags.programId
     ? new web3.PublicKey(String(flags.programId))
-    : AGON_PROTOCOL_PROGRAM_ID;
+    : new web3.PublicKey(DEFAULT_PROGRAM_ID);
   const connection = new web3.Connection(String(flags.rpcUrl || DEFAULT_RPC_URL), "confirmed");
   const readOnlyWallet = {
     publicKey: web3.PublicKey.default,
@@ -130,11 +136,13 @@ async function resolveToken(flags, registry) {
   const sdk = await loadSdk();
   if (flags.tokenId !== undefined) {
     const tokenId = optionalNumber(flags, "tokenId");
-    const tokens = registry?.tokens || [];
-    const found = tokens.find((token) => Number(token.id ?? token.tokenId) === tokenId);
-    return found
-      ? sdk.resolveTokenByMint(tokens, found.mint)
-      : { tokenId, mint: String(flags.mint || sdk.OFFICIAL_DEVNET_USDC_MINT), symbol: "USDC", decimals: 6 };
+    return {
+      tokenId,
+      mint: String(flags.mint || sdk.OFFICIAL_DEVNET_USDC_MINT),
+      symbol: "USDC",
+      decimals: 6,
+      source: "tokenId",
+    };
   }
   if (flags.mint && registry) {
     const found = sdk.resolveTokenByMint(registry.tokens || [], String(flags.mint));
@@ -221,20 +229,24 @@ async function commandPrepare(args, flags) {
   const sdk = await loadSdk();
 
   if (flow === "gateway-commitment") {
-    const payload = sdk.buildGatewayCommitmentPayload({
+    const registry = await loadClient(flags)
+      .then(({ client }) => client.fetchTokenRegistry())
+      .catch(() => null);
+    const token = await resolveToken(flags, registry);
+      const payload = sdk.buildGatewayCommitmentPayload({
       cluster: flags.cluster || DEFAULT_CLUSTER,
-      programId: requireFlag(flags, "programId"),
+      programId: flags.programId || DEFAULT_PROGRAM_ID,
       payerId: Number(requireFlag(flags, "payerId")),
       payeeId: Number(requireFlag(flags, "payeeId")),
-      tokenId: flags.tokenId === undefined ? 0 : Number(flags.tokenId),
+      tokenId: token.tokenId,
       committedAmount: requireFlag(flags, "committedAmount"),
       signer: requireFlag(flags, "signer"),
-      tokenMint: flags.mint || sdk.OFFICIAL_DEVNET_USDC_MINT,
-      tokenSymbol: "USDC",
-      tokenDecimals: 6,
+      tokenMint: token.mint,
+      tokenSymbol: token.symbol || "USDC",
+      tokenDecimals: token.decimals ?? 6,
       signature: flags.signature === undefined ? undefined : String(flags.signature),
       authorizedSettler: flags.authorizedSettler
-        ? new (await loadPackage("@solana/web3.js", path.resolve(__dirname, "..", "..", "agon-sdk", "node_modules", "@solana", "web3.js", "lib", "index.esm.js"))).PublicKey(String(flags.authorizedSettler))
+        ? new (await loadPackage("@solana/web3.js", path.resolve(__dirname, "..", "..", "agon-sdk", "node_modules", "@solana", "web3.js", "lib", "index.cjs.js"))).PublicKey(String(flags.authorizedSettler))
         : null,
     });
     const message = sdk.createGatewayCommitmentMessage(payload);
@@ -248,19 +260,7 @@ async function commandPrepare(args, flags) {
     return;
   }
 
-  const tokenId = flags.tokenId === undefined ? undefined : Number(flags.tokenId);
-  printJson({
-    kind: "prepare",
-    flow,
-    readOnly: true,
-    signs: false,
-    broadcasts: false,
-    token: tokenId === undefined
-      ? { default: "canonical-devnet-USDC", mint: sdk.OFFICIAL_DEVNET_USDC_MINT }
-      : { tokenId },
-    params: flags,
-    note: "This CLI returns a stable account/action plan. Wallet code should use @agonx402/sdk to build, sign, and submit the transaction.",
-  });
+  printJson(await buildProtocolActionPlan(flow, flags));
 }
 
 async function commandVerify(args, flags) {
@@ -285,6 +285,7 @@ async function main() {
     if (action === "show") return commandChannelShow(flags, false);
     if (action === "headroom") return commandChannelShow(flags, true);
   }
+  if (command === "clearing" && args.shift() === "preview") return printJson(await buildClearingPreview(flags));
   if (command === "prepare") return commandPrepare(args, flags);
   if (command === "verify") return commandVerify(args, flags);
   throw new Error(`Unknown command.`);

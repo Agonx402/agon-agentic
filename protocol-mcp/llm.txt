@@ -112,7 +112,7 @@ const channel = await client.fetchChannel({ channelState });
 const usdc = resolveCanonicalDevnetUsdcToken({ registry, env: process.env });
 ```
 
-Prepare common transactions with `AgonClient`:
+Prepare common transactions with `AgonClient` or with the read-only `agon_protocol_prepare_action` MCP tool / `agon-protocol prepare <flow>` CLI command:
 
 - `initializeParticipant`
 - `createChannel`
@@ -131,6 +131,18 @@ Prepare common transactions with `AgonClient`:
 - `registerToken`
 
 Use `client.program.methods.<instructionName>(...)` for generated IDL methods not wrapped by a convenience helper, including cooperative unlock, signer rotation, BLS key registration, registry authority handoff, and config updates.
+
+Protocol MCP tools:
+
+- `agon_protocol_config`
+- `agon_protocol_token`
+- `agon_protocol_participant`
+- `agon_protocol_channel`
+- `agon_protocol_headroom`
+- `agon_protocol_clearing_preview`
+- `agon_protocol_prepare_action`
+- `agon_protocol_prepare_gateway_commitment`
+- `agon_protocol_verify_gateway_commitment`
 
 ## Cumulative commitments
 

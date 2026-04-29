@@ -4,10 +4,13 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
+const pkg = require("./package.json");
+const { buildClearingPreview, buildProtocolActionPlan } = require("./protocol-plan.js");
 
 const PROTOCOL_VERSION = "2024-11-05";
 const LLM_RESOURCE_URI = "agon://protocol/llm.txt";
 const DEFAULT_RPC_URL = process.env.ANCHOR_PROVIDER_URL || process.env.SOLANA_DEVNET_RPC_URL || "https://api.devnet.solana.com";
+const DEFAULT_PROGRAM_ID = process.env.AGON_PROTOCOL_PROGRAM_ID || "3UyUFeNsUYPpM6hMRf7H8wg3MKEXQ82rqnsXhZrUwgSD";
 
 const tools = [
   {
@@ -84,13 +87,33 @@ const tools = [
     },
   },
   {
+    name: "agon_protocol_clearing_preview",
+    description: "Preview BLS clearing-round message size and settlement-event compression for a candidate participant/channel count.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["participants", "channels"],
+      properties: {
+        cluster: { type: "string", enum: ["devnet"] },
+        programId: { type: "string" },
+        tokenId: { type: "integer" },
+        mint: { type: "string" },
+        participants: { type: "integer" },
+        channels: { type: "integer" },
+        bytesLimit: { type: "integer" },
+        targetCumulative: { type: "string" },
+      },
+    },
+  },
+  {
     name: "agon_protocol_prepare_gateway_commitment",
     description: "Prepare a gateway cumulative commitment payload and message bytes. Does not sign.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["programId", "payerId", "payeeId", "tokenId", "committedAmount", "signer"],
+      required: ["payerId", "payeeId", "committedAmount", "signer"],
       properties: {
+        cluster: { type: "string", enum: ["devnet"] },
         programId: { type: "string" },
         payerId: { type: "integer" },
         payeeId: { type: "integer" },
@@ -115,7 +138,7 @@ const tools = [
   },
   {
     name: "agon_protocol_prepare_action",
-    description: "Return a stable prepare-only plan for a protocol action such as deposit, create-channel, lock, unlock, withdrawal, settle-individual, or settle-bundle.",
+    description: "Return a concrete prepare-only instruction/account/message plan for any supported Agon Protocol action.",
     inputSchema: {
       type: "object",
       additionalProperties: true,
@@ -196,17 +219,20 @@ async function loadPackage(name, localFallback) {
   try {
     return await import(name);
   } catch {
+    if (localFallback.endsWith(".cjs.js")) {
+      return require(localFallback);
+    }
     return import(pathToFileURL(localFallback).href);
   }
 }
 
 async function loadClient(args) {
-  const [{ AgonClient, AGON_PROTOCOL_PROGRAM_ID }, anchor, web3] = await Promise.all([
+  const [{ AgonClient }, anchor, web3] = await Promise.all([
     loadSdk(),
     loadPackage("@coral-xyz/anchor", path.resolve(__dirname, "..", "..", "agon-sdk", "node_modules", "@coral-xyz", "anchor", "dist", "cjs", "index.js")),
-    loadPackage("@solana/web3.js", path.resolve(__dirname, "..", "..", "agon-sdk", "node_modules", "@solana", "web3.js", "lib", "index.esm.js")),
+    loadPackage("@solana/web3.js", path.resolve(__dirname, "..", "..", "agon-sdk", "node_modules", "@solana", "web3.js", "lib", "index.cjs.js")),
   ]);
-  const programId = args.programId ? new web3.PublicKey(args.programId) : AGON_PROTOCOL_PROGRAM_ID;
+  const programId = args.programId ? new web3.PublicKey(args.programId) : new web3.PublicKey(DEFAULT_PROGRAM_ID);
   const connection = new web3.Connection(args.rpcUrl || DEFAULT_RPC_URL, "confirmed");
   const provider = new anchor.AnchorProvider(connection, {
     publicKey: web3.PublicKey.default,
@@ -224,11 +250,13 @@ async function resolveToken(args, client) {
   const sdk = await loadSdk();
   const registry = client ? await client.fetchTokenRegistry() : null;
   if (args.tokenId !== undefined) {
-    const tokens = registry?.tokens || [];
-    const found = tokens.find((token) => Number(token.id ?? token.tokenId) === Number(args.tokenId));
-    return found
-      ? sdk.resolveTokenByMint(tokens, found.mint)
-      : { tokenId: Number(args.tokenId), mint: args.mint || sdk.OFFICIAL_DEVNET_USDC_MINT, symbol: "USDC", decimals: 6 };
+    return {
+      tokenId: Number(args.tokenId),
+      mint: args.mint || sdk.OFFICIAL_DEVNET_USDC_MINT,
+      symbol: "USDC",
+      decimals: 6,
+      source: "tokenId",
+    };
   }
   if (args.mint && registry) {
     const found = sdk.resolveTokenByMint(registry.tokens || [], args.mint);
@@ -271,18 +299,28 @@ async function callTool(name, args) {
       }
       return { content: jsonContent(result) };
     }
+    case "agon_protocol_clearing_preview":
+      return { content: jsonContent(await buildClearingPreview(args)) };
     case "agon_protocol_prepare_gateway_commitment": {
+      let token;
+      try {
+        token = await resolveToken(args, (await loadClient(args)).client);
+      } catch {
+        token = args.tokenId === undefined
+          ? sdk.resolveCanonicalDevnetUsdcToken({ env: process.env })
+          : { tokenId: Number(args.tokenId), mint: sdk.OFFICIAL_DEVNET_USDC_MINT, symbol: "USDC", decimals: 6 };
+      }
       const payload = sdk.buildGatewayCommitmentPayload({
-        cluster: "devnet",
-        programId: args.programId,
+        cluster: args.cluster || "devnet",
+        programId: args.programId || DEFAULT_PROGRAM_ID,
         payerId: Number(args.payerId),
         payeeId: Number(args.payeeId),
-        tokenId: Number(args.tokenId),
+        tokenId: token.tokenId,
         committedAmount: args.committedAmount,
         signer: args.signer,
-        tokenMint: sdk.OFFICIAL_DEVNET_USDC_MINT,
-        tokenSymbol: "USDC",
-        tokenDecimals: 6,
+        tokenMint: token.mint,
+        tokenSymbol: token.symbol || "USDC",
+        tokenDecimals: token.decimals ?? 6,
         signature: args.signature,
       });
       const message = sdk.createGatewayCommitmentMessage(payload);
@@ -291,20 +329,7 @@ async function callTool(name, args) {
     case "agon_protocol_verify_gateway_commitment":
       return { content: jsonContent(sdk.verifyGatewayCommitmentEnvelope(args.envelope)) };
     case "agon_protocol_prepare_action":
-      return {
-        content: jsonContent({
-          kind: "prepare",
-          action: args.action,
-          signs: false,
-          broadcasts: false,
-          params: args,
-          tokenDefault: {
-            cluster: "devnet",
-            symbol: "USDC",
-            mint: sdk.OFFICIAL_DEVNET_USDC_MINT,
-          },
-        }),
-      };
+      return { content: jsonContent(await buildProtocolActionPlan(args.action, args)) };
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
@@ -330,7 +355,7 @@ async function handleRequest(message) {
         sendResult(id, {
           protocolVersion: params.protocolVersion || PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false }, resources: { subscribe: false, listChanged: false } },
-          serverInfo: { name: "agon-protocol-mcp", version: "0.1.0" },
+          serverInfo: { name: "agon-protocol-mcp", version: pkg.version },
         });
         return;
       case "tools/list":

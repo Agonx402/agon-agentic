@@ -27,7 +27,25 @@ Access modes:
 
 Do not empty-probe exact-payment POST routes. The payment challenge must commit to the final JSON body. Empty probes are only safe for free/auth-only routes or routes whose catalog schema requires no input.
 
-For `agon-channel` routes, do not use x402 payment headers. Build and sign the Agon cumulative commitment with `@agonx402/sdk`, increment by exactly the route `priceTokenAmount`, and send it in `AGON-COMMITMENT` with a stable `X-Agon-Request-Id`.
+For `agon-channel` routes, do not use x402 payment headers. Build and sign the Agon cumulative commitment with `@agonx402/sdk`, increment by exactly the route `priceTokenAmount`, and send it in `AGON-COMMITMENT` with a stable `X-Agon-Request-Id`. Agon payment-channel routes are devnet-only in v1.
+
+Wallet-agnostic agent tooling:
+
+- CLI: `npx -y @agonx402/gateway-cli`
+- MCP: `npx -y @agonx402/gateway-mcp`
+- Skills: `npx -y @agonx402/agentic install-skills`
+
+Gateway CLI auth helpers:
+
+```bash
+npx -y @agonx402/gateway-cli auth prepare GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1 --json
+npx -y @agonx402/gateway-cli auth complete --challenge challenge.json --address <wallet> --signature <signature> --signature-encoding hex
+npx -y @agonx402/gateway-cli auth call GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1 --auth-driver my-wallet-auth-driver
+```
+
+Auth drivers are local commands that read auth request JSON from stdin and return JSON on stdout. They may return `headers` directly, or for SIWX they may return `address`, `signature`, optional `signatureEncoding`, and optional `chainId`; the CLI will build `SIGN-IN-WITH-X`. Drivers can wrap any wallet, custody system, x402 payer, or Agon channel commitment builder. Do not assume a specific wallet implementation unless the user chooses it.
+
+Gateway MCP mirrors the safe pieces with `agon_gateway_prepare_auth`, `agon_gateway_complete_siwx`, and `agon_gateway_call_with_headers`. MCP does not execute auth-driver commands.
 
 Core public routes:
 
@@ -40,7 +58,7 @@ Core public routes:
 - `POST /v1/x402/helius/devnet/wallet/batch-identity`
 - `GET /v1/x402/tokens/...`
 - `POST /v1/x402/tokens/assets/market-snapshots`
-- `/v1/agon-channel/...` routes discovered from `GET /v1/catalog`
+- `/v1/agon-channel/...` devnet-only routes discovered from `GET /v1/catalog`
 
 Clusters:
 
@@ -90,6 +108,7 @@ Helius Wallet routes:
 - `GET /v1/x402/helius/wallet/transfers/:wallet`
 - `GET /v1/x402/helius/wallet/funded-by/:wallet`
 - Devnet equivalents are under `/v1/x402/helius/devnet/wallet/...`
+- Channel-backed devnet equivalents are under `/v1/agon-channel/helius/devnet/wallet/...`
 
 The `:wallet` path param accepts a base58 Solana address, an SNS `.sol` name, or supported ANS custom TLD. Domain resolution is mainnet-only.
 
@@ -144,10 +163,12 @@ Safety limits:
 - Tokens `market-snapshots` accepts up to 250 ids.
 - Tokens `variant-markets` accepts up to 50 ids.
 
-Internal server-to-server facilitator endpoints are intentionally omitted from public agent metadata. Do not infer, expose, or call private gateway routes from public clients; use `GET /v1/catalog` and documented `/v1/...` routes only.
+Do not infer, expose, or call private gateway routes from public clients; use `GET /v1/catalog` and documented `/v1/...` routes only.
 
 Local agent tooling in this repository:
 
 - CLI: `node agentic/cli/agon-gateway.js`
 - MCP server: `node agentic/mcp/server.js`
 - Skill: `agentic/skills/agon-gateway`
+
+Gateway MCP tools include `agon_gateway_prepare_solana`, `agon_gateway_prepare_wallet`, `agon_gateway_prepare_auth`, `agon_gateway_complete_siwx`, and `agon_gateway_call_with_headers`. Gateway CLI supports `--access-mode agon-channel` on devnet `rpc`, `das`, and `wallet` helpers; callers provide `X-Agon-Request-Id` and `AGON-COMMITMENT` through `--header` or an auth driver.

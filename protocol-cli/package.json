@@ -1,6 +1,6 @@
 {
   "name": "@agonx402/protocol-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Read-only and prepare-only CLI for Agon Protocol agents.",
   "license": "MIT",
   "homepage": "https://github.com/Agonx402/agon-gateway-agentic#readme",
@@ -22,6 +22,7 @@
   },
   "files": [
     "agon-protocol.js",
+    "protocol-plan.js",
     "README.md"
   ],
   "engines": {
@@ -33,7 +34,7 @@
     "@solana/web3.js": "^1.95.3"
   },
   "scripts": {
-    "check": "node --check agon-protocol.js",
+    "check": "node --check agon-protocol.js && node --check protocol-plan.js",
     "start": "node agon-protocol.js",
     "prepack": "npm run check"
   }

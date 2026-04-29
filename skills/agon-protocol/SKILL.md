@@ -42,7 +42,11 @@ npx @agonx402/protocol-cli token show
 npx @agonx402/protocol-cli participant show --owner <owner>
 npx @agonx402/protocol-cli channel show --payer-id <payer-id> --payee-id <payee-id> --token-id <token-id>
 npx @agonx402/protocol-cli channel headroom --payer-id <payer-id> --payee-id <payee-id> --token-id <token-id> --latest-accepted <amount>
-npx @agonx402/protocol-cli prepare gateway-commitment --program-id <program> --payer-id <payer-id> --payee-id <payee-id> --token-id <token-id> --committed-amount <amount> --signer <authorized-signer>
+npx @agonx402/protocol-cli clearing preview --participants <n> --channels <n>
+npx @agonx402/protocol-cli prepare deposit --owner <owner> --owner-token-account <ata> --amount <base-units> --token-id <token-id>
+npx @agonx402/protocol-cli prepare create-channel --owner <payer-owner> --payee-owner <payee-owner> --payer-id <payer-id> --payee-id <payee-id> --token-id <token-id>
+npx @agonx402/protocol-cli prepare settle-bundle --payee-account <participant> --submitter <wallet> --payee-id <payee-id> --token-id <token-id> --entries '<json-array>'
+npx @agonx402/protocol-cli prepare gateway-commitment --payer-id <payer-id> --payee-id <payee-id> --token-id <token-id> --committed-amount <amount> --signer <authorized-signer>
 npx @agonx402/protocol-cli verify gateway-commitment --envelope <base64-json-envelope>
 ```
 
@@ -75,7 +79,7 @@ MCP resource:
 agon://protocol/llm.txt
 ```
 
-MCP tools include config, token, participant, channel, headroom, prepare gateway commitment, verify gateway commitment, and generic prepare action.
+MCP tools include config, token, participant, channel, headroom, clearing preview, prepare gateway commitment, verify gateway commitment, and concrete prepare action plans for the protocol instruction set.
 
 ## SDK Imports
 

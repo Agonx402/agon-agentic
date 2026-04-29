@@ -6,12 +6,12 @@
     "url": "https://github.com/Agonx402/agon-gateway-agentic",
     "source": "github"
   },
-  "version": "0.1.1",
+  "version": "0.1.2",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@agonx402/protocol-mcp",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "transport": {
         "type": "stdio"
       },
@@ -19,6 +19,13 @@
         {
           "name": "SOLANA_DEVNET_RPC_URL",
           "description": "Optional Solana devnet RPC URL.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "AGON_PROTOCOL_PROGRAM_ID",
+          "description": "Optional Agon Protocol program ID. Defaults to the live devnet deployment.",
           "isRequired": false,
           "format": "string",
           "isSecret": false

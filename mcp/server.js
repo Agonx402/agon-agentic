@@ -2,11 +2,14 @@
 "use strict";
 
 const fs = require("node:fs");
+const crypto = require("node:crypto");
 const path = require("node:path");
+const pkg = require("./package.json");
 
 const DEFAULT_BASE_URL = process.env.AGON_GATEWAY_BASE_URL || "https://gateway.agonx402.com";
 const PROTOCOL_VERSION = "2024-11-05";
 const LLM_RESOURCE_URI = "agon://gateway/llm.txt";
+const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 const tools = [
   {
@@ -67,6 +70,29 @@ const tools = [
     },
   },
   {
+    name: "agon_gateway_prepare_wallet",
+    description: "Prepare a Helius Wallet Agon Gateway request object without sending it, including x402 or agon-channel paths.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["action"],
+      properties: {
+        baseUrl: { type: "string" },
+        cluster: { type: "string", enum: ["mainnet", "devnet"], default: "mainnet" },
+        accessMode: { type: "string", enum: ["exact", "agon-channel"], default: "exact" },
+        action: { type: "string", enum: ["identity", "balances", "history", "transfers", "funded-by", "batch-identity"] },
+        wallet: { type: "string", description: "Wallet address for non-batch wallet actions." },
+        wallets: { type: "array", items: { type: "string" }, description: "Wallet list for batch-identity." },
+        query: {
+          oneOf: [
+            { type: "object", additionalProperties: { type: ["string", "number", "boolean"] } },
+            { type: "array", items: { type: "array", minItems: 2, maxItems: 2 } },
+          ],
+        },
+      },
+    },
+  },
+  {
     name: "agon_gateway_call",
     description: "Call an Agon Gateway route. Use without payment/SIWX headers to issue a challenge, then retry with PAYMENT-SIGNATURE, X-PAYMENT, or SIGN-IN-WITH-X.",
     inputSchema: {
@@ -87,6 +113,69 @@ const tools = [
         paymentSignature: { type: "string", description: "Value for PAYMENT-SIGNATURE." },
         xPayment: { type: "string", description: "Value for X-PAYMENT." },
         siwx: { type: "string", description: "Value for SIGN-IN-WITH-X." },
+        headers: { type: "object", additionalProperties: { type: "string" } },
+      },
+    },
+  },
+  {
+    name: "agon_gateway_prepare_auth",
+    description: "Prepare wallet/payment authorization JSON for a Gateway route without signing, paying, or running local commands.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["method", "path"],
+      properties: {
+        baseUrl: { type: "string" },
+        method: { type: "string" },
+        path: { type: "string" },
+        accessMode: { type: "string", enum: ["exact", "siwx", "agon-channel"] },
+        address: { type: "string", description: "Optional wallet address used to render a concrete SIWX signing message." },
+        chainId: { type: "string", description: "Optional SIWX chain ID to select from the challenge." },
+        query: {
+          oneOf: [
+            { type: "object", additionalProperties: { type: ["string", "number", "boolean"] } },
+            { type: "array", items: { type: "array", minItems: 2, maxItems: 2 } },
+          ],
+        },
+        body: { description: "JSON body. Omit for GET/HEAD." },
+        headers: { type: "object", additionalProperties: { type: "string" } },
+      },
+    },
+  },
+  {
+    name: "agon_gateway_complete_siwx",
+    description: "Build a SIGN-IN-WITH-X header from a prepared SIWX challenge plus a wallet address and signature.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["challenge", "address", "signature"],
+      properties: {
+        challenge: { type: "object", description: "The JSON returned by agon_gateway_prepare_auth." },
+        address: { type: "string" },
+        signature: { type: "string" },
+        signatureEncoding: { type: "string", enum: ["hex", "base58", "base64", "base64url"], default: "base58" },
+        chainId: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "agon_gateway_call_with_headers",
+    description: "Call a Gateway route with caller-supplied auth/payment headers. MCP does not sign, pay, or execute wallet commands.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["method", "path", "headers"],
+      properties: {
+        baseUrl: { type: "string" },
+        method: { type: "string" },
+        path: { type: "string" },
+        query: {
+          oneOf: [
+            { type: "object", additionalProperties: { type: ["string", "number", "boolean"] } },
+            { type: "array", items: { type: "array", minItems: 2, maxItems: 2 } },
+          ],
+        },
+        body: { description: "JSON body. Omit for GET/HEAD." },
         headers: { type: "object", additionalProperties: { type: "string" } },
       },
     },
@@ -187,6 +276,40 @@ function appendQuery(url, query) {
   }
 }
 
+function walletPrefix(cluster, accessMode) {
+  if (accessMode === "agon-channel") {
+    if (cluster && cluster !== "devnet") {
+      throw new Error("Agon payment-channel routes are devnet-only. Use cluster=devnet or omit cluster.");
+    }
+    return "/v1/agon-channel/helius/devnet/wallet";
+  }
+  return cluster === "devnet"
+    ? "/v1/x402/helius/devnet/wallet"
+    : "/v1/x402/helius/wallet";
+}
+
+function channelInstructions(accessMode) {
+  return accessMode === "agon-channel"
+    ? [
+      "Send this exact method and path with X-Agon-Request-Id and AGON-COMMITMENT.",
+      "AGON-COMMITMENT must be a signed Agon cumulative commitment envelope denominated in official devnet USDC.",
+    ]
+    : [
+      "Send this exact method, path, and body without payment headers to receive a 402 challenge.",
+      "Retry with the same method, path, and body plus PAYMENT-SIGNATURE or X-PAYMENT.",
+    ];
+}
+
+function routeCluster(args) {
+  if ((args.accessMode || "exact") === "agon-channel") {
+    if (args.cluster && args.cluster !== "devnet") {
+      throw new Error("Agon payment-channel routes are devnet-only. Use cluster=devnet or omit cluster.");
+    }
+    return "devnet";
+  }
+  return args.cluster || "mainnet";
+}
+
 async function fetchGateway(args, method, routePath, options = {}) {
   const baseUrl = normalizeBaseUrl(args.baseUrl);
   const url = new URL(routePath, `${baseUrl}/`);
@@ -244,6 +367,332 @@ function catalogRoutes(catalog) {
   return Array.isArray(catalog.routes) ? catalog.routes : [];
 }
 
+function headerValue(headers, name) {
+  const expected = name.toLowerCase();
+  for (const [key, value] of Object.entries(headers || {})) {
+    if (key.toLowerCase() === expected) return value;
+  }
+  return undefined;
+}
+
+function sha256Hex(value) {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+function requestBodyText(method, body) {
+  const upperMethod = method.toUpperCase();
+  if (body === undefined || upperMethod === "GET" || upperMethod === "HEAD") {
+    return "";
+  }
+  return JSON.stringify(body);
+}
+
+function queryObjectFromUrl(url) {
+  const result = {};
+  for (const [key, value] of url.searchParams.entries()) {
+    if (result[key] === undefined) {
+      result[key] = value;
+    } else if (Array.isArray(result[key])) {
+      result[key].push(value);
+    } else {
+      result[key] = [result[key], value];
+    }
+  }
+  return result;
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function routePathRegex(template) {
+  const pattern = template
+    .split("/")
+    .map((segment) => {
+      if (segment.startsWith(":")) return "[^/]+";
+      if (/^\{[^}]+\}$/.test(segment)) return "[^/]+";
+      return escapeRegExp(segment);
+    })
+    .join("/");
+  return new RegExp(`^${pattern}$`);
+}
+
+function findRouteForRequest(routes, method, pathname) {
+  const upperMethod = method.toUpperCase();
+  return routes.find((route) => {
+    if (route.httpMethod && route.httpMethod.toUpperCase() !== upperMethod) return false;
+    if (!route.path) return false;
+    return route.path === pathname || routePathRegex(route.path).test(pathname);
+  });
+}
+
+function inferRoute(pathname) {
+  const parts = pathname.split("/").filter(Boolean);
+  if (pathname.startsWith("/v1/x402/tokens")) {
+    return { provider: "tokens", surface: "tokens", accessMode: "siwx", cluster: undefined };
+  }
+  if (pathname.startsWith("/v1/agon-channel")) {
+    if (parts[2] === "solana") {
+      return { provider: parts[4] || "helius", surface: parts[5], cluster: "devnet", accessMode: "agon-channel" };
+    }
+    return { provider: parts[2] || "helius", surface: "wallet", cluster: "devnet", accessMode: "agon-channel" };
+  }
+  if (pathname.startsWith("/v1/x402/solana")) {
+    return { provider: parts[4], surface: parts[5], cluster: parts[3], accessMode: "exact" };
+  }
+  if (pathname.startsWith("/v1/x402/helius/devnet/wallet")) {
+    return { provider: "helius", surface: "wallet", cluster: "devnet", accessMode: "exact" };
+  }
+  if (pathname.startsWith("/v1/x402/helius/wallet")) {
+    return { provider: "helius", surface: "wallet", cluster: "mainnet", accessMode: "exact" };
+  }
+  return { provider: undefined, surface: undefined, cluster: undefined, accessMode: "exact" };
+}
+
+function routeSummary(route, fallback) {
+  if (!route) return fallback;
+  return {
+    provider: route.provider,
+    surface: route.surface,
+    cluster: route.cluster || fallback.cluster,
+    accessMode: route.accessMode || fallback.accessMode,
+    method: route.method,
+    httpMethod: route.httpMethod,
+    path: route.path,
+    priceUsd: route.priceUsd,
+    priceTokenAmount: route.priceTokenAmount,
+    paymentNetwork: route.paymentNetwork,
+    tokenSymbol: route.tokenSymbol,
+    tokenDecimals: route.tokenDecimals,
+    tokenMint: route.tokenMint,
+    tokenId: route.tokenId,
+    programId: route.programId,
+    merchantOwner: route.merchantOwner,
+    merchantParticipantId: route.merchantParticipantId,
+    messageVersion: route.messageVersion,
+    messageDomain: route.messageDomain,
+  };
+}
+
+function decodeBase64Json(value) {
+  if (!value) return undefined;
+  const normalized = String(value).replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  try {
+    return JSON.parse(Buffer.from(padded, "base64").toString("utf8"));
+  } catch {
+    return undefined;
+  }
+}
+
+function extractSolanaChainReference(chainId) {
+  return String(chainId).split(":")[1] || "";
+}
+
+function formatSIWSMessage(info, address) {
+  const lines = [
+    `${info.domain} wants you to sign in with your Solana account:`,
+    address,
+    "",
+  ];
+  if (info.statement) {
+    lines.push(info.statement, "");
+  }
+  lines.push(
+    `URI: ${info.uri}`,
+    `Version: ${info.version}`,
+    `Chain ID: ${extractSolanaChainReference(info.chainId)}`,
+    `Nonce: ${info.nonce}`,
+    `Issued At: ${info.issuedAt}`,
+  );
+  if (info.expirationTime) lines.push(`Expiration Time: ${info.expirationTime}`);
+  if (info.notBefore) lines.push(`Not Before: ${info.notBefore}`);
+  if (info.requestId) lines.push(`Request ID: ${info.requestId}`);
+  if (info.resources && info.resources.length > 0) {
+    lines.push("Resources:");
+    for (const resource of info.resources) lines.push(`- ${resource}`);
+  }
+  return lines.join("\n");
+}
+
+function selectedSiwxChain(extension, requestedChainId) {
+  const supported = Array.isArray(extension?.supportedChains) ? extension.supportedChains : [];
+  if (requestedChainId) {
+    return supported.find((chain) => chain.chainId === requestedChainId) || {
+      chainId: requestedChainId,
+      type: requestedChainId.startsWith("solana:") ? "ed25519" : "eip191",
+    };
+  }
+  return supported[0];
+}
+
+function siwxChallenge(paymentRequired, args) {
+  const extension = paymentRequired?.extensions?.["sign-in-with-x"];
+  if (!extension) return undefined;
+  const chain = selectedSiwxChain(extension, args.chainId);
+  const info = chain ? { ...extension.info, chainId: chain.chainId, type: chain.type } : { ...extension.info };
+  const signingMessage = args.address && info.chainId?.startsWith("solana:")
+    ? formatSIWSMessage(info, args.address)
+    : undefined;
+  return {
+    info: extension.info,
+    supportedChains: extension.supportedChains || [],
+    selectedChain: chain,
+    signingMessage,
+    signingMessageRequiresAddress: !signingMessage,
+    messageFormat: "CAIP-122 Sign-In-With-X. For Solana, sign the SIWS message formed from info + selectedChain + address.",
+  };
+}
+
+function authInstructions(accessMode) {
+  if (accessMode === "siwx") {
+    return [
+      "Sign the SIWX challenge with any compatible wallet/payment layer.",
+      "Retry the exact same request with SIGN-IN-WITH-X.",
+    ];
+  }
+  if (accessMode === "agon-channel") {
+    return [
+      "Build the next cumulative Agon commitment for this route price and metadata.",
+      "Retry the exact same request with X-Agon-Request-Id and AGON-COMMITMENT.",
+    ];
+  }
+  return [
+    "Create an x402 exact payment for the decoded payment requirements.",
+    "Retry the exact same request with PAYMENT-SIGNATURE or X-PAYMENT.",
+  ];
+}
+
+async function prepareAuth(args) {
+  const baseUrl = normalizeBaseUrl(args.baseUrl);
+  const method = args.method.toUpperCase();
+  const url = new URL(args.path, `${baseUrl}/`);
+  appendQuery(url, args.query);
+  const bodyText = requestBodyText(method, args.body);
+
+  let catalogRoute;
+  try {
+    const catalog = await getCatalog({ baseUrl });
+    catalogRoute = findRouteForRequest(catalogRoutes(catalog), method, url.pathname);
+  } catch {
+    catalogRoute = undefined;
+  }
+
+  const fallbackRoute = inferRoute(url.pathname);
+  let route = routeSummary(catalogRoute, fallbackRoute);
+  let accessMode = args.accessMode || route.accessMode || fallbackRoute.accessMode;
+  let challengeResponse;
+  let paymentRequired;
+
+  if (accessMode !== "agon-channel") {
+    challengeResponse = await fetchGateway({
+      baseUrl,
+      query: args.query,
+      body: args.body,
+      headers: args.headers,
+    }, method, args.path);
+    paymentRequired = decodeBase64Json(headerValue(challengeResponse.headers, "payment-required"));
+    if (paymentRequired?.extensions?.["sign-in-with-x"]) accessMode = "siwx";
+    else if (paymentRequired?.accepts?.length > 0) accessMode = "exact";
+    route = { ...route, accessMode };
+  }
+
+  return {
+    version: 1,
+    accessMode,
+    method,
+    url: url.toString(),
+    path: url.pathname,
+    query: queryObjectFromUrl(url),
+    body: args.body === undefined ? null : args.body,
+    bodyHashSha256: sha256Hex(bodyText),
+    route,
+    challenge: {
+      responseStatus: challengeResponse?.status,
+      headers: challengeResponse?.headers || {},
+      body: challengeResponse?.body,
+      paymentRequired,
+      siwx: siwxChallenge(paymentRequired, args),
+    },
+    instructions: authInstructions(accessMode),
+  };
+}
+
+function encodeBase58(bytes) {
+  if (!bytes || bytes.length === 0) return "";
+  const digits = [0];
+  for (const byte of bytes) {
+    let carry = byte;
+    for (let index = 0; index < digits.length; index += 1) {
+      carry += digits[index] << 8;
+      digits[index] = carry % 58;
+      carry = Math.floor(carry / 58);
+    }
+    while (carry > 0) {
+      digits.push(carry % 58);
+      carry = Math.floor(carry / 58);
+    }
+  }
+  for (const byte of bytes) {
+    if (byte === 0) digits.push(0);
+    else break;
+  }
+  return digits.reverse().map((digit) => BASE58_ALPHABET[digit]).join("");
+}
+
+function signatureBytes(signature, encoding) {
+  const text = String(signature);
+  if (encoding === "hex" || (encoding === undefined && /^0x?[0-9a-fA-F]+$/.test(text))) {
+    return Buffer.from(text.replace(/^0x/, ""), "hex");
+  }
+  if (encoding === "base64") return Buffer.from(text, "base64");
+  if (encoding === "base64url") return Buffer.from(text.replace(/-/g, "+").replace(/_/g, "/"), "base64");
+  return undefined;
+}
+
+function normalizeSignature(signature, encoding, chainId) {
+  if (!chainId?.startsWith("solana:")) return String(signature);
+  if (encoding === "base58") return String(signature);
+  const bytes = signatureBytes(signature, encoding);
+  return bytes ? encodeBase58(bytes) : String(signature);
+}
+
+function completeSiwx(authRequest, input) {
+  const challenge = authRequest.challenge?.siwx;
+  if (!challenge) throw new Error("Challenge does not contain a sign-in-with-x extension.");
+  const chain = selectedSiwxChain({ supportedChains: challenge.supportedChains }, input.chainId || challenge.selectedChain?.chainId);
+  if (!chain?.chainId) throw new Error("No SIWX chain is available.");
+  const info = {
+    ...challenge.info,
+    chainId: chain.chainId,
+    type: chain.type || (chain.chainId.startsWith("solana:") ? "ed25519" : "eip191"),
+  };
+  const payload = {
+    domain: info.domain,
+    address: input.address,
+    statement: info.statement,
+    uri: info.uri,
+    version: info.version,
+    chainId: info.chainId,
+    type: info.type,
+    nonce: info.nonce,
+    issuedAt: info.issuedAt,
+    expirationTime: info.expirationTime,
+    notBefore: info.notBefore,
+    requestId: info.requestId,
+    resources: info.resources,
+    signature: normalizeSignature(input.signature, input.signatureEncoding, info.chainId),
+  };
+  Object.keys(payload).forEach((key) => payload[key] === undefined && delete payload[key]);
+  return {
+    headers: {
+      "SIGN-IN-WITH-X": Buffer.from(JSON.stringify(payload), "utf8").toString("base64"),
+    },
+    payload,
+    signingMessage: info.chainId.startsWith("solana:") ? formatSIWSMessage(info, input.address) : undefined,
+  };
+}
+
 async function callTool(name, args) {
   switch (name) {
     case "agon_gateway_health":
@@ -266,7 +715,7 @@ async function callTool(name, args) {
     }
 
     case "agon_gateway_prepare_solana": {
-      const cluster = args.cluster || "mainnet";
+      const cluster = routeCluster(args);
       const provider = args.provider || "helius";
       const accessMode = args.accessMode || "exact";
       const prefix = accessMode === "agon-channel" ? "/v1/agon-channel" : "/v1/x402";
@@ -281,19 +730,55 @@ async function callTool(name, args) {
           path: pathValue,
           body,
           accessMode,
-          instructions: [
-            accessMode === "agon-channel"
-              ? "Send this exact method, path, and body with X-Agon-Request-Id and AGON-COMMITMENT."
-              : "Send this exact method, path, and body without payment headers to receive a 402 challenge.",
-            accessMode === "agon-channel"
-              ? "AGON-COMMITMENT must be a signed Agon cumulative commitment envelope."
-              : "Retry with the same method, path, and body plus PAYMENT-SIGNATURE or X-PAYMENT.",
-          ],
+          instructions: channelInstructions(accessMode),
+        }),
+      };
+    }
+
+    case "agon_gateway_prepare_wallet": {
+      const cluster = routeCluster(args);
+      const accessMode = args.accessMode || "exact";
+      const prefix = walletPrefix(cluster, accessMode);
+      const action = args.action === "funded-by" ? "funded-by" : args.action;
+      if (action === "batch-identity") {
+        if (!Array.isArray(args.wallets) || args.wallets.length === 0) {
+          throw new Error("batch-identity requires wallets.");
+        }
+        return {
+          content: jsonContent({
+            baseUrl: normalizeBaseUrl(args.baseUrl),
+            method: "POST",
+            path: `${prefix}/batch-identity`,
+            body: { wallets: args.wallets },
+            accessMode,
+            query: args.query,
+            instructions: channelInstructions(accessMode),
+          }),
+        };
+      }
+      if (!args.wallet) throw new Error(`${action} requires wallet.`);
+      return {
+        content: jsonContent({
+          baseUrl: normalizeBaseUrl(args.baseUrl),
+          method: "GET",
+          path: `${prefix}/${action}/${encodeURIComponent(args.wallet)}`,
+          accessMode,
+          query: args.query,
+          instructions: channelInstructions(accessMode),
         }),
       };
     }
 
     case "agon_gateway_call":
+      return { content: jsonContent(await fetchGateway(args, args.method, args.path)) };
+
+    case "agon_gateway_prepare_auth":
+      return { content: jsonContent(await prepareAuth(args)) };
+
+    case "agon_gateway_complete_siwx":
+      return { content: jsonContent(completeSiwx(args.challenge, args)) };
+
+    case "agon_gateway_call_with_headers":
       return { content: jsonContent(await fetchGateway(args, args.method, args.path)) };
 
     default:
@@ -331,7 +816,7 @@ async function handleRequest(message) {
           },
           serverInfo: {
             name: "agon-gateway-mcp",
-            version: "0.1.0",
+            version: pkg.version,
           },
         });
         return;

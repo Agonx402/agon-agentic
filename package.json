@@ -1,0 +1,40 @@
+{
+  "name": "@agonx402/agentic",
+  "version": "0.1.1",
+  "description": "Installer for Agon Gateway and Agon Protocol agent skills.",
+  "license": "MIT",
+  "homepage": "https://github.com/Agonx402/agon-gateway-agentic#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Agonx402/agon-gateway-agentic.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Agonx402/agon-gateway-agentic/issues"
+  },
+  "keywords": [
+    "agon",
+    "x402",
+    "solana",
+    "agents",
+    "skills",
+    "payment-channels"
+  ],
+  "bin": {
+    "agonx402-agentic": "./install.js"
+  },
+  "files": [
+    "install.js",
+    "README.md",
+    "skills/**",
+    "llm.txt",
+    "llms.txt"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "check": "node --check install.js",
+    "start": "node install.js",
+    "prepack": "npm run check"
+  }
+}
