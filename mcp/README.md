@@ -2,7 +2,7 @@
 
 MCP server for Agon Gateway discovery and route calls.
 
-MCP name: `io.github.agonx402/agon-gateway`
+MCP name: `io.github.Agonx402/agon-gateway`
 
 ```json
 {

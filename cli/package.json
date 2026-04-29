@@ -1,6 +1,6 @@
 {
   "name": "@agonx402/gateway-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Zero-dependency CLI for discovering and calling Agon Gateway routes.",
   "license": "MIT",
   "homepage": "https://github.com/Agonx402/agon-gateway-agentic#readme",

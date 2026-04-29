@@ -1,0 +1,8 @@
+node_modules/
+*.tgz
+*.log
+mcp-publisher.exe
+registry.exe
+.env
+.env.*
+!.env.example

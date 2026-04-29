@@ -1,0 +1,57 @@
+# Agon Protocol
+
+Agon Protocol is a Solana payment-channel and clearing protocol. Agents should use the shared `@agonx402/sdk` implementation for account derivation, message bytes, commitment verification, and settlement preparation.
+
+## Core actors
+
+- Participant: protocol account for a wallet owner.
+- Payer: participant that funds a directed channel.
+- Payee: participant that can settle signed cumulative commitments.
+- Merchant gateway: payee that accepts per-request cumulative commitments before serving API calls.
+
+## Token policy
+
+Gateway-channel v1 uses official devnet USDC only:
+
+`4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`
+
+Do not use synthetic stablecoin names for gateway-channel flows. Resolve the Agon token ID from the deployed token registry or `AGON_PROTOCOL_DEVNET_USDC_TOKEN_ID`.
+
+## User flows
+
+Participant setup:
+1. Initialize participant.
+2. Deposit official devnet USDC.
+3. Create a directed channel to the merchant.
+4. Lock USDC into the channel.
+
+Gateway payment:
+1. Fetch the gateway catalog entry.
+2. Read `priceTokenAmount`, `programId`, `tokenId`, `merchantParticipantId`, `messageDomain`, and token metadata.
+3. Compute next cumulative amount as previous accepted amount plus route price.
+4. Sign the Agon cumulative commitment message with the channel authorized signer.
+5. Send the request with `X-Agon-Request-Id` and `AGON-COMMITMENT`.
+
+Unlocks and withdrawals:
+- Participant withdrawals are instant.
+- Cooperative channel unlock is immediate when both parties agree.
+- Unilateral channel unlock is the 72-hour fallback.
+- Merchants should only cooperate with unlock once accepted unsettled commitments are settled or reconciled.
+
+Settlement:
+- Individual settlement settles one signed channel commitment.
+- Bundle settlement lets a payee settle many latest commitments.
+- BLS clearing settles multilateral rounds, but gateway-channel v1 uses bundle settlement, not BLS.
+
+## BLS caveats
+
+Agon BLS v1 is Agon-specific. It is not an IETF hash-to-curve BLS ciphersuite. Clients and services must use shared Agon implementation and test vectors.
+
+There is no BLS key rotation path yet. A lost or compromised BLS key means the participant should migrate to a new participant identity for BLS clearing.
+
+## Agent guardrails
+
+- CLI and MCP tools are read + prepare only.
+- Do not ask them to sign or broadcast.
+- Do not use payment channels for Tokens SIWX routes; those remain free/authenticated.
+- Verify cumulative commitments against the exact Agon message bytes.

@@ -13,7 +13,7 @@ Agon Gateway CLI
 Usage:
   agon-gateway health [--base-url URL]
   agon-gateway catalog [--provider alchemy|helius|tokens] [--json]
-  agon-gateway routes [--provider NAME] [--surface NAME] [--access-mode exact|siwx] [--json]
+  agon-gateway routes [--provider NAME] [--surface NAME] [--access-mode exact|siwx|agon-channel] [--json]
   agon-gateway show <path-or-method> [--provider NAME] [--surface NAME] [--json]
   agon-gateway call <METHOD> <PATH> [--query k=v] [--body JSON|@file] [--payment-signature VALUE] [--x-payment VALUE] [--siwx VALUE]
   agon-gateway rpc <method> <params-json> [--provider helius|alchemy] [--cluster mainnet|devnet]
@@ -212,7 +212,7 @@ function printRoutes(routes) {
     provider: route.provider,
     surface: route.surface,
     access: route.accessMode,
-    price: route.priceUsd || "",
+    price: route.priceUsd || route.priceTokenAmount || "",
     path: route.path,
     description: route.description,
   }));
@@ -328,7 +328,9 @@ async function main() {
       const cluster = flags.cluster || "mainnet";
       const provider = flags.provider || "helius";
       const path = `/v1/x402/solana/${cluster}/${provider}/rpc/${method}`;
-      printJson(await requestGateway(flags, "POST", path, { body: { params } }));
+      const channelPath = `/v1/agon-channel/solana/devnet/${provider}/rpc/${method}`;
+      const requestPath = flags.accessMode === "agon-channel" ? channelPath : path;
+      printJson(await requestGateway(flags, "POST", requestPath, { body: { params } }));
       return;
     }
 
@@ -342,7 +344,9 @@ async function main() {
       const cluster = flags.cluster || "mainnet";
       const provider = flags.provider || "helius";
       const path = `/v1/x402/solana/${cluster}/${provider}/das/${method}`;
-      printJson(await requestGateway(flags, "POST", path, { body: { params } }));
+      const channelPath = `/v1/agon-channel/solana/devnet/${provider}/das/${method}`;
+      const requestPath = flags.accessMode === "agon-channel" ? channelPath : path;
+      printJson(await requestGateway(flags, "POST", requestPath, { body: { params } }));
       return;
     }
 

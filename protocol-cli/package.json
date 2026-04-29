@@ -1,0 +1,40 @@
+{
+  "name": "@agonx402/protocol-cli",
+  "version": "0.1.0",
+  "description": "Read-only and prepare-only CLI for Agon Protocol agents.",
+  "license": "MIT",
+  "homepage": "https://github.com/Agonx402/agon-gateway-agentic#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Agonx402/agon-gateway-agentic.git",
+    "directory": "protocol-cli"
+  },
+  "keywords": [
+    "agon",
+    "protocol",
+    "solana",
+    "payment-channels",
+    "cli",
+    "agents"
+  ],
+  "bin": {
+    "agon-protocol": "./agon-protocol.js"
+  },
+  "files": [
+    "agon-protocol.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@agonx402/sdk": "^0.2.0",
+    "@coral-xyz/anchor": "^0.32.1",
+    "@solana/web3.js": "^1.95.3"
+  },
+  "scripts": {
+    "check": "node --check agon-protocol.js",
+    "start": "node agon-protocol.js",
+    "prepack": "npm run check"
+  }
+}

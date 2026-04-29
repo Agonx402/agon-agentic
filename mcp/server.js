@@ -44,7 +44,7 @@ const tools = [
         surface: { type: "string", enum: ["rpc", "das", "wallet", "tokens"] },
         method: { type: "string" },
         path: { type: "string" },
-        accessMode: { type: "string", enum: ["exact", "siwx"] },
+        accessMode: { type: "string", enum: ["exact", "siwx", "agon-channel"] },
       },
     },
   },
@@ -60,6 +60,7 @@ const tools = [
         cluster: { type: "string", enum: ["mainnet", "devnet"], default: "mainnet" },
         provider: { type: "string", enum: ["alchemy", "helius"], default: "helius" },
         surface: { type: "string", enum: ["rpc", "das"] },
+        accessMode: { type: "string", enum: ["exact", "agon-channel"], default: "exact" },
         method: { type: "string" },
         params: { description: "RPC params array or DAS params object." },
       },
@@ -267,7 +268,11 @@ async function callTool(name, args) {
     case "agon_gateway_prepare_solana": {
       const cluster = args.cluster || "mainnet";
       const provider = args.provider || "helius";
-      const pathValue = `/v1/x402/solana/${cluster}/${provider}/${args.surface}/${args.method}`;
+      const accessMode = args.accessMode || "exact";
+      const prefix = accessMode === "agon-channel" ? "/v1/agon-channel" : "/v1/x402";
+      const pathValue = accessMode === "agon-channel"
+        ? `${prefix}/solana/devnet/${provider}/${args.surface}/${args.method}`
+        : `${prefix}/solana/${cluster}/${provider}/${args.surface}/${args.method}`;
       const body = { params: args.params };
       return {
         content: jsonContent({
@@ -275,10 +280,14 @@ async function callTool(name, args) {
           method: "POST",
           path: pathValue,
           body,
-          accessMode: "exact",
+          accessMode,
           instructions: [
-            "Send this exact method, path, and body without payment headers to receive a 402 challenge.",
-            "Retry with the same method, path, and body plus PAYMENT-SIGNATURE or X-PAYMENT.",
+            accessMode === "agon-channel"
+              ? "Send this exact method, path, and body with X-Agon-Request-Id and AGON-COMMITMENT."
+              : "Send this exact method, path, and body without payment headers to receive a 402 challenge.",
+            accessMode === "agon-channel"
+              ? "AGON-COMMITMENT must be a signed Agon cumulative commitment envelope."
+              : "Retry with the same method, path, and body plus PAYMENT-SIGNATURE or X-PAYMENT.",
           ],
         }),
       };

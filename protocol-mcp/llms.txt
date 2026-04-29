@@ -1,0 +1,3 @@
+# Agon Protocol
+
+See `llm.txt`. This package exposes the same content as MCP resource `agon://protocol/llm.txt`.
