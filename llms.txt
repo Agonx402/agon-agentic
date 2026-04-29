@@ -17,14 +17,17 @@ GET /v1/catalog?provider=helius
 GET /v1/catalog?provider=tokens
 ```
 
-The catalog is the source of truth. Each route entry includes `path`, `httpMethod`, `provider`, `surface`, `method`, `description`, `accessMode`, `paymentRequired`, optional `priceUsd`, input schemas, examples, output schemas, path-param schemas, payment network, and payment asset metadata.
+The catalog is the source of truth. Each route entry includes `path`, `httpMethod`, `provider`, `surface`, `method`, `description`, `accessMode`, `paymentRequired`, optional `priceUsd`, optional `priceTokenAmount`, input schemas, examples, output schemas, path-param schemas, payment network, and payment/channel asset metadata.
 
 Access modes:
 
 - `exact`: standard x402 exact-payment flow. Used by Solana RPC, Solana DAS, and Helius Wallet routes. First request must include the final method, URL, query, and JSON body being purchased. On `402 Payment Required`, create the x402 payment with the agent wallet/payment layer, then retry the exact same request with `PAYMENT-SIGNATURE` or `X-PAYMENT`.
 - `siwx`: sign-in-with-x wallet authentication. Used by Tokens API routes. No payment is required, but a wallet signature is required. On `402 Payment Required`, sign the SIWX challenge and retry with `SIGN-IN-WITH-X`.
+- `agon-channel`: Agon Protocol payment-channel authorization. Used by `/v1/agon-channel/...` routes for channel-backed Solana RPC, DAS, and Helius Wallet calls. Requires `X-Agon-Request-Id` and `AGON-COMMITMENT`; prices are `priceTokenAmount` values denominated in official devnet USDC.
 
 Do not empty-probe exact-payment POST routes. The payment challenge must commit to the final JSON body. Empty probes are only safe for free/auth-only routes or routes whose catalog schema requires no input.
+
+For `agon-channel` routes, do not use x402 payment headers. Build and sign the Agon cumulative commitment with `@agonx402/sdk`, increment by exactly the route `priceTokenAmount`, and send it in `AGON-COMMITMENT` with a stable `X-Agon-Request-Id`.
 
 Core public routes:
 
@@ -37,6 +40,7 @@ Core public routes:
 - `POST /v1/x402/helius/devnet/wallet/batch-identity`
 - `GET /v1/x402/tokens/...`
 - `POST /v1/x402/tokens/assets/market-snapshots`
+- `/v1/agon-channel/...` routes discovered from `GET /v1/catalog`
 
 Clusters:
 
@@ -140,11 +144,7 @@ Safety limits:
 - Tokens `market-snapshots` accepts up to 250 ids.
 - Tokens `variant-markets` accepts up to 50 ids.
 
-Never expose or call internal facilitator routes from public clients:
-
-- `/api/internal/facilitator/supported`
-- `/api/internal/facilitator/verify`
-- `/api/internal/facilitator/settle`
+Internal server-to-server facilitator endpoints are intentionally omitted from public agent metadata. Do not infer, expose, or call private gateway routes from public clients; use `GET /v1/catalog` and documented `/v1/...` routes only.
 
 Local agent tooling in this repository:
 

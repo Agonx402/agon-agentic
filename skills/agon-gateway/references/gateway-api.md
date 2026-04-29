@@ -15,7 +15,7 @@ Derived from `agon-gateway` README and `src-v2` route builders on 2026-04-27. Pr
 - `GET /v1/catalog?provider=helius`
 - `GET /v1/catalog?provider=tokens`
 
-Catalog route entries include `path`, `httpMethod`, `provider`, `surface`, `method`, `description`, `accessMode`, `paymentRequired`, optional `priceUsd`, schemas, examples, and payment metadata.
+Catalog route entries include `path`, `httpMethod`, `provider`, `surface`, `method`, `description`, `accessMode`, `paymentRequired`, optional `priceUsd`, optional `priceTokenAmount`, schemas, examples, and payment/channel metadata.
 
 ## Exact-Payment Route Flow
 
@@ -39,6 +39,18 @@ Use for Tokens API routes.
 4. Retry the same request with `SIGN-IN-WITH-X`.
 
 Tokens routes are wallet-authenticated and `paymentRequired: false`.
+
+## Agon Channel Route Flow
+
+Use for `/v1/agon-channel/...` routes discovered from `GET /v1/catalog`.
+
+1. Select a catalog route with `accessMode: "agon-channel"`.
+2. Read `priceTokenAmount`, `tokenMint`, `tokenId`, `programId`, `merchantOwner`, `merchantParticipantId`, and `messageDomain` from route metadata.
+3. Use `@agonx402/sdk` to build the next cumulative Agon commitment.
+4. Sign the exact Agon message bytes with the channel authorized signer.
+5. Send the final API request with `X-Agon-Request-Id` and `AGON-COMMITMENT`.
+
+Do not use x402 payment headers for channel routes. Tokens SIWX routes remain free/authenticated and do not use payment channels.
 
 ## Solana RPC Routes
 
@@ -186,13 +198,7 @@ Batch limits:
 
 ## Internal Routes
 
-Do not expose these in public docs, LLM metadata, or client tooling:
-
-- `GET /api/internal/facilitator/supported`
-- `POST /api/internal/facilitator/verify`
-- `POST /api/internal/facilitator/settle`
-
-They require `x-agon-internal-secret` and are only for server-to-server facilitator plumbing.
+Internal server-to-server facilitator endpoints are intentionally omitted from this public skill reference. Do not infer, expose, or call private gateway routes from public clients; use `GET /v1/catalog` and documented `/v1/...` routes only.
 
 ## Agentic CLI
 
