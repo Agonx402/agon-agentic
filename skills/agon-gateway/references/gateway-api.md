@@ -1,6 +1,6 @@
 # Agon Gateway API Reference
 
-Derived from `agon-gateway` README and `src-v2` route builders on 2026-04-27. Prefer the live `/v1/catalog` response whenever exact route metadata matters.
+Derived from `agon-gateway` README and `src-v2` route builders on 2026-04-27. Prefer the live `/v1/catalog` response whenever exact route metadata matters. For known documented routes, agents may call the route directly and handle the returned challenge.
 
 ## Base URLs
 
@@ -227,7 +227,7 @@ node agentic/cli/agon-gateway.js agent-prompt
 node agentic/cli/agon-gateway.js schema
 node agentic/cli/agon-gateway.js doctor
 node agentic/cli/agon-gateway.js auth prepare GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1 --json
-node agentic/cli/agon-gateway.js auth call GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1 --auth-driver my-wallet-auth-driver
+node agentic/cli/agon-gateway.js auth call GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1
 node agentic/cli/agon-gateway.js call GET /v1/x402/tokens/health --siwx "$SIGN_IN_WITH_X"
 ```
 
@@ -242,7 +242,14 @@ Wallet-agnostic auth helpers:
 
 - `auth prepare <METHOD> <PATH>` returns an auth request JSON object with `accessMode`, final URL/query/body hash, catalog route metadata, and decoded challenge details when available.
 - `auth complete --challenge FILE --address ADDRESS --signature SIGNATURE` creates a `SIGN-IN-WITH-X` header from a prepared SIWX challenge.
-- `auth call <METHOD> <PATH> --auth-driver COMMAND` sends the auth request JSON to the driver on stdin and expects JSON on stdout.
+- `auth call <METHOD> <PATH>` uses `AGON_SIGNER_COMMAND`, or `--auth-driver COMMAND`, to send the auth request JSON to the driver on stdin and expects JSON on stdout.
+
+Default signer hook:
+
+```bash
+npx -y @agonx402/agent-wallet setup --profile default
+export AGON_SIGNER_COMMAND='npx -y @agonx402/agent-wallet authorize'
+```
 
 Auth drivers must return one of:
 
@@ -281,6 +288,7 @@ Tools:
 - `agon_gateway_prepare_auth`
 - `agon_gateway_complete_siwx`
 - `agon_gateway_call_with_headers`
+- `agon_gateway_auth_call`
 
 The MCP server exposes `agon://gateway/llm.txt` as a resource.
-MCP never executes local auth-driver commands. The host should use its own wallet/payment layer and pass produced headers back with `agon_gateway_call_with_headers`.
+`agon_gateway_auth_call` uses `AGON_SIGNER_COMMAND` or a caller-supplied signer command to perform the generic challenge -> signer hook -> exact retry flow. Low-level tools remain available when the host wants to sign externally and pass produced headers back with `agon_gateway_call_with_headers`.

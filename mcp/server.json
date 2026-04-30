@@ -16,12 +16,40 @@
                                            "type":  "stdio"
                                        },
                          "environmentVariables":  [
-                                                      {
-                                                          "description":  "Optional Agon Gateway base URL. Defaults to https://gateway.agonx402.com.",
-                                                          "isRequired":  false,
-                                                          "format":  "string",
-                                                          "isSecret":  false,
-                                                          "name":  "AGON_GATEWAY_BASE_URL"
+                                                     {
+                                                         "description":  "Optional Agon Gateway base URL. Defaults to https://gateway.agonx402.com.",
+                                                         "isRequired":  false,
+                                                         "format":  "string",
+                                                         "isSecret":  false,
+                                                         "name":  "AGON_GATEWAY_BASE_URL"
+                                                     },
+                                                     {
+                                                         "description":  "Optional signer command used by agon_gateway_auth_call. Defaults are installed by @agonx402/agentic setup.",
+                                                         "isRequired":  false,
+                                                         "format":  "string",
+                                                         "isSecret":  false,
+                                                         "name":  "AGON_SIGNER_COMMAND"
+                                                     },
+                                                     {
+                                                         "description":  "Optional Agon wallet profile hint passed to signer hooks.",
+                                                         "isRequired":  false,
+                                                         "format":  "string",
+                                                         "isSecret":  false,
+                                                         "name":  "AGON_WALLET_PROFILE"
+                                                     },
+                                                     {
+                                                         "description":  "Optional x402 maximum USD amount per request.",
+                                                         "isRequired":  false,
+                                                         "format":  "string",
+                                                         "isSecret":  false,
+                                                         "name":  "AGON_PAYMENT_MAX_AMOUNT_USD"
+                                                     },
+                                                     {
+                                                         "description":  "Optional x402 daily authorized spend limit in USD.",
+                                                         "isRequired":  false,
+                                                         "format":  "string",
+                                                         "isSecret":  false,
+                                                         "name":  "AGON_PAYMENT_DAILY_LIMIT_USD"
                                                       }
                                                   ]
                      }

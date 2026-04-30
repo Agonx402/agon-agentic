@@ -8,7 +8,7 @@ Base URL:
 https://gateway.agonx402.com
 ```
 
-Start every integration by fetching the live catalog:
+For known documented routes, call the route directly. For unknown routes, fetch the live catalog:
 
 ```http
 GET /v1/catalog
@@ -33,19 +33,21 @@ Wallet-agnostic agent tooling:
 
 - CLI: `npx -y @agonx402/gateway-cli`
 - MCP: `npx -y @agonx402/gateway-mcp`
-- Skills: `npx -y @agonx402/agentic install-skills`
+- Setup: `npx -y @agonx402/agentic setup --target all`
+- Skills only: `npx -y @agonx402/agentic install-skills`
+- Default signer hook: `npx -y @agonx402/agent-wallet authorize`
 
 Gateway CLI auth helpers:
 
 ```bash
 npx -y @agonx402/gateway-cli auth prepare GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1 --json
 npx -y @agonx402/gateway-cli auth complete --challenge challenge.json --address <wallet> --signature <signature> --signature-encoding hex
-npx -y @agonx402/gateway-cli auth call GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1 --auth-driver my-wallet-auth-driver
+npx -y @agonx402/gateway-cli auth call GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1
 ```
 
-Auth drivers are local commands that read auth request JSON from stdin and return JSON on stdout. They may return `headers` directly, or for SIWX they may return `address`, `signature`, optional `signatureEncoding`, and optional `chainId`; the CLI will build `SIGN-IN-WITH-X`. Drivers can wrap any wallet, custody system, x402 payer, or Agon channel commitment builder. Do not assume a specific wallet implementation unless the user chooses it.
+Auth drivers/signer hooks are local commands that read auth request JSON from stdin and return JSON on stdout. They may return `headers` directly, or for SIWX they may return `address`, `signature`, optional `signatureEncoding`, and optional `chainId`; the CLI will build `SIGN-IN-WITH-X`. Drivers can wrap the default Agon agent wallet, browser wallets, custody systems, x402 payers, or Agon channel commitment builders. Do not assume a specific wallet implementation unless the user chooses it.
 
-Gateway MCP mirrors the safe pieces with `agon_gateway_prepare_auth`, `agon_gateway_complete_siwx`, and `agon_gateway_call_with_headers`. MCP does not execute auth-driver commands.
+Gateway MCP mirrors the safe pieces with `agon_gateway_prepare_auth`, `agon_gateway_complete_siwx`, and `agon_gateway_call_with_headers`. It also exposes `agon_gateway_auth_call`, which uses `AGON_SIGNER_COMMAND` or a caller-supplied signer command to perform challenge -> sign/pay -> exact retry.
 
 Core public routes:
 

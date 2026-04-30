@@ -10,7 +10,7 @@ npx @agonx402/gateway-cli agent-prompt
 npx @agonx402/gateway-cli schema
 npx @agonx402/gateway-cli doctor
 npx @agonx402/gateway-cli auth prepare GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1 --json
-npx @agonx402/gateway-cli auth call GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1 --auth-driver my-wallet-auth-driver
+npx @agonx402/gateway-cli auth call GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1
 npx @agonx402/gateway-cli rpc getBalance '["11111111111111111111111111111111"]' --provider helius
 npx @agonx402/gateway-cli rpc getBalance '["11111111111111111111111111111111"]' --provider helius --access-mode agon-channel --header 'X-Agon-Request-Id:<id>' --header 'AGON-COMMITMENT:<envelope>'
 npx @agonx402/gateway-cli wallet balances <wallet> --cluster devnet --access-mode agon-channel --header 'X-Agon-Request-Id:<id>' --header 'AGON-COMMITMENT:<envelope>'
@@ -25,7 +25,20 @@ Payment and auth headers are caller-supplied:
 - `--siwx <value>` for `SIGN-IN-WITH-X`
 - `--header 'X-Agon-Request-Id:<id>' --header 'AGON-COMMITMENT:<envelope>'` for `/v1/agon-channel/...`
 
-The CLI also supports wallet-agnostic auth drivers. An auth driver is any local command that reads the prepared auth request JSON from stdin and returns JSON on stdout. The CLI does not store keys, sign messages, submit payments, or edit wallet config.
+The CLI supports wallet-agnostic signer hooks. Set `AGON_SIGNER_COMMAND` or pass `--auth-driver`. A signer hook is any local command that reads the prepared auth request JSON from stdin and returns JSON on stdout.
+
+```bash
+export AGON_SIGNER_COMMAND='npx -y @agonx402/agent-wallet authorize'
+npx @agonx402/gateway-cli auth call GET /v1/x402/tokens/assets/solana/profile
+```
+
+The default Agon wallet can be created with:
+
+```bash
+npx -y @agonx402/agent-wallet setup --profile default
+```
+
+It is a convenience wallet for SIWX and small policy-capped x402 payments. External wallets, browser wallets, custody systems, and policy engines can replace it by implementing the same stdin/stdout contract.
 
 Supported driver outputs:
 

@@ -23,7 +23,7 @@ https://gateway.agonx402.com
 curl https://gateway.agonx402.com/healthz
 ```
 
-3. Fetch the live catalog and choose a route from its metadata:
+3. For unknown routes, fetch the live catalog and choose a route from its metadata. For known documented routes, call the endpoint directly.
 
 ```bash
 curl https://gateway.agonx402.com/v1/catalog
@@ -85,25 +85,38 @@ If this repo's agentic tools are available, prefer them over hand-written curl c
 node agentic/cli/agon-gateway.js catalog --provider helius
 node agentic/cli/agon-gateway.js agent-prompt
 node agentic/cli/agon-gateway.js schema
+node agentic/cli/agon-gateway.js auth call GET /v1/x402/tokens/assets/solana/profile
 node agentic/cli/agon-gateway.js auth prepare GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1 --json
 node agentic/cli/agon-gateway.js auth call GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1 --auth-driver my-wallet-auth-driver
 node agentic/cli/agon-gateway.js routes --provider tokens
 node agentic/cli/agon-gateway.js call POST /v1/x402/solana/mainnet/helius/rpc/getBalance --body '{"params":["11111111111111111111111111111111"]}'
 node agentic/cli/agon-gateway.js wallet balances <wallet> --cluster devnet --access-mode agon-channel --header 'X-Agon-Request-Id:<id>' --header 'AGON-COMMITMENT:<envelope>'
 node agentic/mcp/server.js
+node agentic/agent-wallet/agon-wallet.js setup --profile default
 ```
 
-The CLI and MCP server do not hold private keys and do not sign payments. Use them to discover routes, prepare calls, issue challenges, and retry with already-created `PAYMENT-SIGNATURE`, `X-PAYMENT`, or `SIGN-IN-WITH-X` headers.
+Generic authenticated call flow:
 
-For lower-friction automation, use wallet-agnostic auth drivers:
+1. Use a known route or discover one from `/v1/catalog`.
+2. Send the exact final request to receive the `402` challenge.
+3. Pass the normalized auth request to the configured signer hook.
+4. Retry the exact same request with the returned `SIGN-IN-WITH-X`, `PAYMENT-SIGNATURE`, `X-PAYMENT`, or channel headers.
+
+Use `AGON_SIGNER_COMMAND` for default automation:
+
+```bash
+AGON_SIGNER_COMMAND="npx -y @agonx402/agent-wallet authorize" node agentic/cli/agon-gateway.js auth call GET /v1/x402/tokens/assets/solana/profile
+```
+
+For lower-friction automation, use wallet-agnostic signer hooks/auth drivers:
 
 - `auth prepare` returns normalized JSON for `siwx`, `exact`, or `agon-channel`.
 - `auth complete` turns an SIWX address/signature into `SIGN-IN-WITH-X`.
-- `auth call --auth-driver <command>` sends auth request JSON to a local driver over stdin and retries with returned headers.
+- `auth call` uses `AGON_SIGNER_COMMAND`, or `--auth-driver <command>`, to send auth request JSON to a local driver over stdin and retry with returned headers.
 
-An auth driver may wrap any wallet/payment system. Do not assume a specific wallet implementation unless the user explicitly chooses it.
+An auth driver may wrap any wallet/payment system. It can return headers directly or return address/signature for SIWX. Do not assume a specific wallet implementation unless the user explicitly chooses it.
 
-Gateway MCP mirrors this as prepare/complete/call-with-headers tools. MCP does not execute arbitrary local signer commands.
+Gateway MCP mirrors this as prepare/complete/call-with-headers tools and also exposes `agon_gateway_auth_call` for the generic challenge -> signer hook -> retry flow.
 
 ## Guardrails
 

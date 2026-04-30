@@ -1,0 +1,46 @@
+{
+  "name": "@agonx402/agent-wallet",
+  "version": "0.1.0",
+  "description": "Generic local agent wallet and signer hook for Agon Gateway SIWX and x402 flows.",
+  "license": "MIT",
+  "homepage": "https://github.com/Agonx402/agon-gateway-agentic#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Agonx402/agon-gateway-agentic.git",
+    "directory": "agent-wallet"
+  },
+  "bugs": {
+    "url": "https://github.com/Agonx402/agon-gateway-agentic/issues"
+  },
+  "keywords": [
+    "agon",
+    "x402",
+    "siwx",
+    "solana",
+    "agent",
+    "wallet"
+  ],
+  "bin": {
+    "agon-wallet": "./agon-wallet.js"
+  },
+  "files": [
+    "agon-wallet.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@scure/base": "^1.2.6",
+    "@solana/kit": "^6.8.0",
+    "@solana/web3.js": "^1.98.4",
+    "@x402/core": "^2.11.0",
+    "@x402/extensions": "^2.11.0",
+    "@x402/svm": "^2.11.0"
+  },
+  "scripts": {
+    "check": "node --check agon-wallet.js",
+    "start": "node agon-wallet.js",
+    "prepack": "npm run check"
+  }
+}

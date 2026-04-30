@@ -4,9 +4,12 @@
 const fs = require("node:fs");
 const crypto = require("node:crypto");
 const path = require("node:path");
+const childProcess = require("node:child_process");
 const pkg = require("./package.json");
 
 const DEFAULT_BASE_URL = process.env.AGON_GATEWAY_BASE_URL || "https://gateway.agonx402.com";
+const DEFAULT_MAX_AMOUNT_USD = "0.01";
+const DEFAULT_DAILY_LIMIT_USD = "1.00";
 const PROTOCOL_VERSION = "2024-11-05";
 const LLM_RESOURCE_URI = "agon://gateway/llm.txt";
 const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -177,6 +180,32 @@ const tools = [
         },
         body: { description: "JSON body. Omit for GET/HEAD." },
         headers: { type: "object", additionalProperties: { type: "string" } },
+      },
+    },
+  },
+  {
+    name: "agon_gateway_auth_call",
+    description: "Call any Agon Gateway route, use a configured signer hook for SIWX/x402 challenges, and retry the exact same request.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["method", "path"],
+      properties: {
+        baseUrl: { type: "string" },
+        method: { type: "string" },
+        path: { type: "string" },
+        query: {
+          oneOf: [
+            { type: "object", additionalProperties: { type: ["string", "number", "boolean"] } },
+            { type: "array", items: { type: "array", minItems: 2, maxItems: 2 } },
+          ],
+        },
+        body: { description: "JSON body. Omit for GET/HEAD." },
+        headers: { type: "object", additionalProperties: { type: "string" } },
+        signerCommand: { type: "string", description: "Signer hook command. Defaults to AGON_SIGNER_COMMAND." },
+        walletProfile: { type: "string", description: "Optional wallet profile hint passed to the signer hook." },
+        maxAmountUsd: { type: "string", description: "Optional x402 max per request." },
+        dailyLimitUsd: { type: "string", description: "Optional x402 daily authorized spend limit." },
       },
     },
   },
@@ -544,6 +573,27 @@ function siwxChallenge(paymentRequired, args) {
   };
 }
 
+function authKind(accessMode) {
+  if (accessMode === "siwx") return "siwx";
+  if (accessMode === "exact") return "x402-exact";
+  return accessMode;
+}
+
+function policyFromArgs(args) {
+  return {
+    maxAmountUsdPerRequest: String(
+      args.maxAmountUsd
+      || process.env.AGON_PAYMENT_MAX_AMOUNT_USD
+      || DEFAULT_MAX_AMOUNT_USD,
+    ),
+    dailyLimitUsd: String(
+      args.dailyLimitUsd
+      || process.env.AGON_PAYMENT_DAILY_LIMIT_USD
+      || DEFAULT_DAILY_LIMIT_USD,
+    ),
+  };
+}
+
 function authInstructions(accessMode) {
   if (accessMode === "siwx") {
     return [
@@ -563,7 +613,7 @@ function authInstructions(accessMode) {
   ];
 }
 
-async function prepareAuth(args) {
+async function prepareAuth(args, existingChallengeResponse) {
   const baseUrl = normalizeBaseUrl(args.baseUrl);
   const method = args.method.toUpperCase();
   const url = new URL(args.path, `${baseUrl}/`);
@@ -581,16 +631,18 @@ async function prepareAuth(args) {
   const fallbackRoute = inferRoute(url.pathname);
   let route = routeSummary(catalogRoute, fallbackRoute);
   let accessMode = args.accessMode || route.accessMode || fallbackRoute.accessMode;
-  let challengeResponse;
+  let challengeResponse = existingChallengeResponse;
   let paymentRequired;
 
   if (accessMode !== "agon-channel") {
-    challengeResponse = await fetchGateway({
-      baseUrl,
-      query: args.query,
-      body: args.body,
-      headers: args.headers,
-    }, method, args.path);
+    if (!challengeResponse) {
+      challengeResponse = await fetchGateway({
+        baseUrl,
+        query: args.query,
+        body: args.body,
+        headers: args.headers,
+      }, method, args.path);
+    }
     paymentRequired = decodeBase64Json(headerValue(challengeResponse.headers, "payment-required"));
     if (paymentRequired?.extensions?.["sign-in-with-x"]) accessMode = "siwx";
     else if (paymentRequired?.accepts?.length > 0) accessMode = "exact";
@@ -599,6 +651,7 @@ async function prepareAuth(args) {
 
   return {
     version: 1,
+    kind: authKind(accessMode),
     accessMode,
     method,
     url: url.toString(),
@@ -606,6 +659,13 @@ async function prepareAuth(args) {
     query: queryObjectFromUrl(url),
     body: args.body === undefined ? null : args.body,
     bodyHashSha256: sha256Hex(bodyText),
+    request: {
+      method,
+      url: url.toString(),
+      bodyHashSha256: sha256Hex(bodyText),
+    },
+    walletProfile: args.walletProfile || process.env.AGON_WALLET_PROFILE,
+    policy: policyFromArgs(args),
     route,
     challenge: {
       responseStatus: challengeResponse?.status,
@@ -691,6 +751,95 @@ function completeSiwx(authRequest, input) {
     payload,
     signingMessage: info.chainId.startsWith("solana:") ? formatSIWSMessage(info, input.address) : undefined,
   };
+}
+
+function splitCommandLine(value) {
+  const text = String(value || "").trim();
+  if (!text) throw new Error("A signer command is required. Pass signerCommand or set AGON_SIGNER_COMMAND.");
+  const parts = [];
+  let current = "";
+  let quote = null;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote) {
+      if (char === quote) quote = null;
+      else current += char;
+      continue;
+    }
+    if (char === "\"" || char === "'") {
+      quote = char;
+    } else if (/\s/.test(char)) {
+      if (current) {
+        parts.push(current);
+        current = "";
+      }
+    } else {
+      current += char;
+    }
+  }
+  if (quote) throw new Error("Unclosed quote in signer command.");
+  if (current) parts.push(current);
+  return parts;
+}
+
+function authHeadersFromSignerOutput(output, authRequest) {
+  if (output?.headers && typeof output.headers === "object" && !Array.isArray(output.headers)) {
+    return Object.fromEntries(Object.entries(output.headers).map(([key, value]) => [key, String(value)]));
+  }
+  if (authRequest.accessMode === "siwx" && output?.address && output?.signature) {
+    return completeSiwx(authRequest, {
+      address: String(output.address),
+      signature: String(output.signature),
+      signatureEncoding: output.signatureEncoding,
+      chainId: output.chainId,
+    }).headers;
+  }
+  throw new Error("Signer command must return headers, or address/signature for SIWX.");
+}
+
+function runSignerCommand(commandValue, authRequest) {
+  const parts = splitCommandLine(commandValue);
+  const command = parts.shift();
+  const result = childProcess.spawnSync(command, parts, {
+    input: JSON.stringify(authRequest),
+    encoding: "utf8",
+    shell: process.platform === "win32" && /^(npx|npm|pnpm|yarn)$/i.test(command),
+    timeout: 30000,
+    maxBuffer: 5 * 1024 * 1024,
+  });
+  if (result.error) {
+    throw new Error(`Signer command failed to start: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    throw new Error(`Signer command exited with status ${result.status}: ${(result.stderr || "").trim()}`);
+  }
+  let output;
+  try {
+    output = JSON.parse(result.stdout || "{}");
+  } catch (error) {
+    throw new Error(`Signer command returned invalid JSON: ${error.message}`);
+  }
+  return authHeadersFromSignerOutput(output, authRequest);
+}
+
+async function authCall(args) {
+  const firstResponse = await fetchGateway(args, args.method, args.path);
+  if (firstResponse.status !== 402) {
+    return firstResponse;
+  }
+  const signerCommand = args.signerCommand || process.env.AGON_SIGNER_COMMAND;
+  if (!signerCommand) {
+    throw new Error("Gateway returned 402 Payment Required; agon_gateway_auth_call requires signerCommand or AGON_SIGNER_COMMAND.");
+  }
+  const authRequest = await prepareAuth(args, firstResponse);
+  const signerHeaders = runSignerCommand(signerCommand, authRequest);
+  return fetchGateway({
+    ...args,
+    headers: {
+      ...(args.headers || {}),
+      ...signerHeaders,
+    },
+  }, args.method, args.path);
 }
 
 async function callTool(name, args) {
@@ -780,6 +929,9 @@ async function callTool(name, args) {
 
     case "agon_gateway_call_with_headers":
       return { content: jsonContent(await fetchGateway(args, args.method, args.path)) };
+
+    case "agon_gateway_auth_call":
+      return { content: jsonContent(await authCall(args)) };
 
     default:
       throw new Error(`Unknown tool: ${name}`);

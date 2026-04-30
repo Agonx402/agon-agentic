@@ -4,8 +4,16 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const childProcess = require("node:child_process");
 
 const PACKAGE_NAME = "@agonx402/agentic";
+const GATEWAY_MCP_PACKAGE = "@agonx402/gateway-mcp";
+const PROTOCOL_MCP_PACKAGE = "@agonx402/protocol-mcp";
+const AGENT_WALLET_PACKAGE = "@agonx402/agent-wallet";
+const DEFAULT_GATEWAY_BASE_URL = "https://gateway.agonx402.com";
+const DEFAULT_WALLET_PROFILE = "default";
+const DEFAULT_MAX_AMOUNT_USD = "0.01";
+const DEFAULT_DAILY_LIMIT_USD = "1.00";
 const SKILLS = [
   {
     name: "agon-gateway",
@@ -27,15 +35,17 @@ Agon Agentic Installer
 
 Usage:
   agonx402-agentic install-skills [--target agents|codex|all] [--target-dir PATH] [--dry-run]
+  agonx402-agentic setup [--target codex|claude-desktop|cursor|windsurf|generic|all] [--dry-run]
+                         [--wallet-profile NAME] [--max-amount-usd USD] [--daily-limit-usd USD]
   agonx402-agentic list
   agonx402-agentic doctor
-  agonx402-agentic setup
   agonx402-agentic help
 
 Examples:
   npx -y ${PACKAGE_NAME} install-skills
   npx -y ${PACKAGE_NAME} install-skills --target codex
   npx -y ${PACKAGE_NAME} install-skills --target all
+  npx -y ${PACKAGE_NAME} setup --target all
 `;
   process.stdout.write(text.trimStart());
   process.exit(exitCode);
@@ -153,28 +163,33 @@ function installSkills(flags) {
   assertBundledSkills();
 
   const dryRun = Boolean(flags.dryRun);
+  const quiet = Boolean(flags.quiet);
   const targets = resolveInstallTargets(flags);
 
   for (const targetRoot of targets) {
     if (dryRun) {
       process.stdout.write(`[dry-run] target ${targetRoot}\n`);
-    } else {
+    } else if (!quiet) {
       fs.mkdirSync(targetRoot, { recursive: true });
       process.stdout.write(`Installing Agon skills into ${targetRoot}\n`);
+    } else {
+      fs.mkdirSync(targetRoot, { recursive: true });
     }
 
     for (const skill of SKILLS) {
       const source = path.join(skillsRoot(), skill.name);
       const destination = assertSafeDestination(targetRoot, skill.name);
       copySkill(source, destination, dryRun);
-      if (!dryRun) {
+      if (!dryRun && !quiet) {
         process.stdout.write(`  installed ${skill.name}\n`);
       }
     }
   }
 
-  process.stdout.write("\n");
-  printSetup();
+  if (!quiet) {
+    process.stdout.write("\n");
+    printSetup();
+  }
 }
 
 function parseSkillMetadata(skillName) {
@@ -221,15 +236,290 @@ function doctor() {
   printSetup();
 }
 
+function agonHome() {
+  return path.resolve(process.env.AGON_HOME || path.join(os.homedir(), ".agon"));
+}
+
+function setupPolicy(flags) {
+  const policy = {
+    maxAmountUsdPerRequest: String(flags.maxAmountUsd || DEFAULT_MAX_AMOUNT_USD),
+    dailyLimitUsd: String(flags.dailyLimitUsd || DEFAULT_DAILY_LIMIT_USD),
+  };
+  const filePath = path.join(agonHome(), "policy.json");
+  const serialized = `${JSON.stringify(policy, null, 2)}\n`;
+  const existing = readTextFile(filePath);
+  if (flags.dryRun) {
+    process.stdout.write(existing === serialized
+      ? `[dry-run] Agon policy already up to date ${filePath}\n`
+      : `[dry-run] write ${filePath}: ${JSON.stringify(policy)}\n`);
+    return policy;
+  }
+  if (existing === serialized) {
+    process.stdout.write(`Agon policy already up to date ${filePath}\n`);
+    return policy;
+  }
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, serialized, { mode: 0o600 });
+  try {
+    fs.chmodSync(filePath, 0o600);
+  } catch {
+    // Best effort on platforms/filesystems that do not support chmod.
+  }
+  process.stdout.write(`Wrote Agon policy ${filePath}\n`);
+  return policy;
+}
+
+function setupWallet(flags) {
+  const profile = String(flags.walletProfile || DEFAULT_WALLET_PROFILE);
+  const args = ["-y", AGENT_WALLET_PACKAGE, "setup", "--profile", profile];
+  if (flags.dryRun) {
+    process.stdout.write(`[dry-run] npx ${args.join(" ")}\n`);
+    return;
+  }
+  const result = childProcess.spawnSync("npx", args, {
+    encoding: "utf8",
+    shell: process.platform === "win32",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
+  if (result.error) throw new Error(`Failed to run ${AGENT_WALLET_PACKAGE}: ${result.error.message}`);
+  if (result.status !== 0) throw new Error(`${AGENT_WALLET_PACKAGE} setup exited with status ${result.status}.`);
+}
+
+function mcpEnv(flags, policy) {
+  return {
+    AGON_GATEWAY_BASE_URL: String(flags.gatewayBaseUrl || DEFAULT_GATEWAY_BASE_URL),
+    AGON_SIGNER_COMMAND: String(flags.signerCommand || `npx -y ${AGENT_WALLET_PACKAGE} authorize`),
+    AGON_WALLET_PROFILE: String(flags.walletProfile || DEFAULT_WALLET_PROFILE),
+    AGON_PAYMENT_MAX_AMOUNT_USD: String(policy.maxAmountUsdPerRequest),
+    AGON_PAYMENT_DAILY_LIMIT_USD: String(policy.dailyLimitUsd),
+  };
+}
+
+function gatewayServerConfig(env) {
+  return {
+    command: "npx",
+    args: ["-y", GATEWAY_MCP_PACKAGE],
+    env,
+  };
+}
+
+function protocolServerConfig() {
+  return {
+    command: "npx",
+    args: ["-y", PROTOCOL_MCP_PACKAGE],
+  };
+}
+
+function mcpJsonConfig(env) {
+  return {
+    mcpServers: {
+      "agon-gateway": gatewayServerConfig(env),
+      "agon-protocol": protocolServerConfig(),
+    },
+  };
+}
+
+function readJsonFile(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") return {};
+    throw new Error(`Unable to read JSON config ${filePath}: ${error.message}`);
+  }
+}
+
+function readTextFile(filePath) {
+  try {
+    return fs.readFileSync(filePath, "utf8");
+  } catch (error) {
+    if (error.code === "ENOENT") return undefined;
+    throw error;
+  }
+}
+
+function backupFile(filePath) {
+  if (!fs.existsSync(filePath)) return undefined;
+  const backupPath = `${filePath}.bak-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+  fs.copyFileSync(filePath, backupPath);
+  return backupPath;
+}
+
+function writeJsonMcpConfig(filePath, env, flags) {
+  const next = readJsonFile(filePath);
+  next.mcpServers = {
+    ...(next.mcpServers || {}),
+    ...mcpJsonConfig(env).mcpServers,
+  };
+  const serialized = `${JSON.stringify(next, null, 2)}\n`;
+  const existing = readTextFile(filePath);
+  if (flags.dryRun) {
+    process.stdout.write(existing === serialized
+      ? `[dry-run] MCP JSON already up to date ${filePath}\n`
+      : `[dry-run] write MCP JSON ${filePath}\n`);
+    return;
+  }
+  if (existing === serialized) {
+    process.stdout.write(`MCP config already up to date ${filePath}\n`);
+    return;
+  }
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const backupPath = backupFile(filePath);
+  fs.writeFileSync(filePath, serialized);
+  process.stdout.write(`Registered Agon MCP in ${filePath}${backupPath ? ` (backup ${backupPath})` : ""}\n`);
+}
+
+function tomlString(value) {
+  return JSON.stringify(String(value));
+}
+
+function tomlArray(values) {
+  return `[ ${values.map(tomlString).join(", ")} ]`;
+}
+
+function tomlInlineTable(object) {
+  return `{ ${Object.entries(object).map(([key, value]) => `${tomlString(key)} = ${tomlString(value)}`).join(", ")} }`;
+}
+
+function stripTomlSection(text, sectionName) {
+  const escaped = sectionName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`\\n?\\[${escaped}\\][\\s\\S]*?(?=\\n\\[[^\\n]+\\]|$)`, "g");
+  return text.replace(pattern, "").trimEnd();
+}
+
+function writeCodexConfig(filePath, env, flags) {
+  const existing = readTextFile(filePath) || "";
+  let next = stripTomlSection(existing, "mcp_servers.agon_gateway");
+  next = stripTomlSection(next, "mcp_servers.agon_protocol");
+  const block = `
+
+[mcp_servers.agon_gateway]
+command = "npx"
+args = ${tomlArray(["-y", GATEWAY_MCP_PACKAGE])}
+env = ${tomlInlineTable(env)}
+
+[mcp_servers.agon_protocol]
+command = "npx"
+args = ${tomlArray(["-y", PROTOCOL_MCP_PACKAGE])}
+`;
+  next = `${next.trimEnd()}${block}`.trimStart();
+  if (flags.dryRun) {
+    process.stdout.write(existing === next
+      ? `[dry-run] Codex MCP config already up to date ${filePath}\n`
+      : `[dry-run] write Codex MCP config ${filePath}\n`);
+    return;
+  }
+  if (existing === next) {
+    process.stdout.write(`Codex MCP config already up to date ${filePath}\n`);
+    return;
+  }
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const backupPath = backupFile(filePath);
+  fs.writeFileSync(filePath, next);
+  process.stdout.write(`Registered Agon MCP in ${filePath}${backupPath ? ` (backup ${backupPath})` : ""}\n`);
+}
+
+function appDataDir() {
+  return process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming");
+}
+
+function clientAdapters() {
+  const home = os.homedir();
+  return {
+    codex: {
+      label: "Codex",
+      path: path.join(home, ".codex", "config.toml"),
+      requiredDir: path.join(home, ".codex"),
+      write: writeCodexConfig,
+    },
+    "claude-desktop": {
+      label: "Claude Desktop",
+      path: process.platform === "darwin"
+        ? path.join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json")
+        : process.platform === "win32"
+          ? path.join(appDataDir(), "Claude", "claude_desktop_config.json")
+          : path.join(home, ".config", "Claude", "claude_desktop_config.json"),
+      requiredDir: process.platform === "darwin"
+        ? path.join(home, "Library", "Application Support", "Claude")
+        : process.platform === "win32"
+          ? path.join(appDataDir(), "Claude")
+          : path.join(home, ".config", "Claude"),
+      write: writeJsonMcpConfig,
+    },
+    cursor: {
+      label: "Cursor",
+      path: path.join(home, ".cursor", "mcp.json"),
+      requiredDir: path.join(home, ".cursor"),
+      write: writeJsonMcpConfig,
+    },
+    windsurf: {
+      label: "Windsurf",
+      path: process.platform === "win32"
+        ? path.join(appDataDir(), "Windsurf", "mcp_config.json")
+        : path.join(home, ".codeium", "windsurf", "mcp_config.json"),
+      requiredDir: process.platform === "win32"
+        ? path.join(appDataDir(), "Windsurf")
+        : path.join(home, ".codeium", "windsurf"),
+      write: writeJsonMcpConfig,
+    },
+    generic: {
+      label: "Generic MCP JSON",
+      path: path.join(agonHome(), "mcp.json"),
+      requiredDir: null,
+      write: writeJsonMcpConfig,
+    },
+  };
+}
+
+function setupTargets(flags) {
+  const target = String(flags.target || "all").toLowerCase();
+  const adapters = clientAdapters();
+  if (target === "all") return Object.keys(adapters);
+  if (!adapters[target]) {
+    throw new Error("Invalid setup --target. Use codex, claude-desktop, cursor, windsurf, generic, or all.");
+  }
+  return [target];
+}
+
+function registerMcpClients(flags, policy) {
+  const adapters = clientAdapters();
+  const targets = setupTargets(flags);
+  const env = mcpEnv(flags, policy);
+  const all = String(flags.target || "all").toLowerCase() === "all";
+  for (const target of targets) {
+    const adapter = adapters[target];
+    if (all && adapter.requiredDir && !fs.existsSync(adapter.requiredDir)) {
+      process.stdout.write(`Skipping ${adapter.label}: ${adapter.requiredDir} not found.\n`);
+      continue;
+    }
+    adapter.write(adapter.path, env, flags);
+  }
+}
+
+function setup(flags) {
+  const dryRun = Boolean(flags.dryRun);
+  process.stdout.write(`${dryRun ? "[dry-run] " : ""}Setting up Agon agentic tools\n`);
+  installSkills({ target: "agents", dryRun, quiet: true });
+  if (!dryRun) process.stdout.write("Installed Agon skills into the generic agent skills directory.\n");
+  const policy = setupPolicy(flags);
+  setupWallet(flags);
+  registerMcpClients(flags, policy);
+}
+
 function printSetup() {
   process.stdout.write(`Next steps:
 
 Gateway CLI:
   npx -y @agonx402/gateway-cli catalog
+  npx -y @agonx402/gateway-cli auth call GET /v1/x402/tokens/assets/search --query q=solana --query limit=1
 
 Protocol CLI:
   npx -y @agonx402/protocol-cli config
   npx -y @agonx402/protocol-cli token show
+
+Agent wallet:
+  npx -y @agonx402/agent-wallet setup --profile default
 
 MCP server commands:
   npx -y @agonx402/gateway-mcp
@@ -240,7 +530,14 @@ Example MCP config:
   "mcpServers": {
     "agon-gateway": {
       "command": "npx",
-      "args": ["-y", "@agonx402/gateway-mcp"]
+      "args": ["-y", "@agonx402/gateway-mcp"],
+      "env": {
+        "AGON_GATEWAY_BASE_URL": "https://gateway.agonx402.com",
+        "AGON_SIGNER_COMMAND": "npx -y @agonx402/agent-wallet authorize",
+        "AGON_WALLET_PROFILE": "default",
+        "AGON_PAYMENT_MAX_AMOUNT_USD": "0.01",
+        "AGON_PAYMENT_DAILY_LIMIT_USD": "1.00"
+      }
     },
     "agon-protocol": {
       "command": "npx",
@@ -252,7 +549,8 @@ Example MCP config:
 Notes:
 - Payment-channel routes are devnet-only in v1.
 - Tokens SIWX routes do not use payment channels.
-- This installer does not store keys, sign, broadcast, or edit MCP config files.
+- Run \`npx -y @agonx402/agentic setup --target all\` for skills, default wallet, policy, and MCP registration.
+- The default wallet is a convenience agent wallet; use AGON_SIGNER_COMMAND to swap in any wallet or policy system.
 `);
 }
 
@@ -271,7 +569,7 @@ function main() {
       doctor();
       return;
     case "setup":
-      printSetup();
+      setup(flags);
       return;
     case "help":
       usage(0);

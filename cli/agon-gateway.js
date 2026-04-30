@@ -8,6 +8,8 @@ const path = require("node:path");
 const pkg = require("./package.json");
 
 const DEFAULT_BASE_URL = process.env.AGON_GATEWAY_BASE_URL || "https://gateway.agonx402.com";
+const DEFAULT_MAX_AMOUNT_USD = "0.01";
+const DEFAULT_DAILY_LIMIT_USD = "1.00";
 const JSON_HEADERS = new Set([
   "content-type",
   "payment-required",
@@ -29,7 +31,7 @@ Usage:
   agon-gateway call <METHOD> <PATH> [--query k=v] [--body JSON|@file] [--payment-signature VALUE] [--x-payment VALUE] [--siwx VALUE] [--auth-driver COMMAND]
   agon-gateway auth prepare <METHOD> <PATH> [--query k=v] [--body JSON|@file] [--address ADDRESS] [--json]
   agon-gateway auth complete --challenge FILE|- --address ADDRESS --signature SIGNATURE [--signature-encoding hex|base58|base64|base64url] [--chain-id CHAIN]
-  agon-gateway auth call <METHOD> <PATH> --auth-driver COMMAND [--auth-arg VALUE] [--query k=v] [--body JSON|@file]
+  agon-gateway auth call <METHOD> <PATH> [--auth-driver COMMAND] [--auth-arg VALUE] [--query k=v] [--body JSON|@file]
   agon-gateway agent-prompt
   agon-gateway schema
   agon-gateway doctor [--auth-driver COMMAND]
@@ -42,11 +44,18 @@ Usage:
 Examples:
   agon-gateway catalog --provider helius
   agon-gateway auth prepare GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1 --json
+  AGON_SIGNER_COMMAND="npx -y @agonx402/agent-wallet authorize" agon-gateway auth call GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1
   agon-gateway auth call GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1 --auth-driver my-wallet-auth-driver
   agon-gateway rpc getBalance '["11111111111111111111111111111111"]' --provider helius
   agon-gateway das getAsset '{"id":"<asset-id>"}'
   agon-gateway wallet balances GQUtvPx89ZNCwmvQqFmH59bJcU8fW8siETpaxod7Aydz --query limit=25
   agon-gateway tokens assets/search --query q=solana --query limit=5
+
+Environment:
+  AGON_SIGNER_COMMAND              Default signer command for auth call and authenticated calls.
+  AGON_WALLET_PROFILE              Optional wallet profile passed through auth requests.
+  AGON_PAYMENT_MAX_AMOUNT_USD      Default x402 max per request.
+  AGON_PAYMENT_DAILY_LIMIT_USD     Default x402 daily authorized spend limit.
 `;
   process.stderr.write(text.trimStart());
   process.exit(exitCode);
@@ -308,14 +317,26 @@ async function requestGatewayRaw(flags, method, requestPath, options = {}) {
 
 async function requestGateway(flags, method, requestPath, options = {}) {
   const request = buildGatewayRequest(flags, method, requestPath, options);
-  if (flags.authDriver) {
-    const authRequest = await prepareAuthRequest(flags, method, requestPath, {
-      ...options,
-      body: request.body,
-    });
-    const driverHeaders = runAuthDriver(flags, authRequest);
-    Object.assign(request.headers, driverHeaders);
+  const firstResponse = await sendBuiltRequest(request);
+  if (firstResponse.status !== 402) {
+    return firstResponse;
   }
+
+  const signerCommand = authDriverCommand(flags);
+  if (!signerCommand) {
+    if (options.requireSignerOn402) {
+      throw new Error("Gateway returned 402 Payment Required; provide --auth-driver or set AGON_SIGNER_COMMAND.");
+    }
+    return firstResponse;
+  }
+
+  const authRequest = await prepareAuthRequest(flags, method, requestPath, {
+    ...options,
+    body: request.body,
+    challengeResponse: firstResponse,
+  });
+  const driverHeaders = runAuthDriver(flags, authRequest, signerCommand);
+  Object.assign(request.headers, driverHeaders);
   return sendBuiltRequest(request);
 }
 
@@ -524,6 +545,27 @@ function siwxChallenge(paymentRequired, flags) {
   };
 }
 
+function authKind(accessMode) {
+  if (accessMode === "siwx") return "siwx";
+  if (accessMode === "exact") return "x402-exact";
+  return accessMode;
+}
+
+function policyFromFlags(flags) {
+  return {
+    maxAmountUsdPerRequest: String(
+      flags.maxAmountUsd
+      || process.env.AGON_PAYMENT_MAX_AMOUNT_USD
+      || DEFAULT_MAX_AMOUNT_USD,
+    ),
+    dailyLimitUsd: String(
+      flags.dailyLimitUsd
+      || process.env.AGON_PAYMENT_DAILY_LIMIT_USD
+      || DEFAULT_DAILY_LIMIT_USD,
+    ),
+  };
+}
+
 async function prepareAuthRequest(flags, method, requestPath, options = {}) {
   const request = buildGatewayRequest(flags, method, requestPath, {
     ...options,
@@ -541,15 +583,17 @@ async function prepareAuthRequest(flags, method, requestPath, options = {}) {
   const fallbackRoute = inferRoute(request.path);
   let route = routeSummary(catalogRoute, fallbackRoute);
   let accessMode = flags.accessMode || route.accessMode || fallbackRoute.accessMode;
-  let challengeResponse;
+  let challengeResponse = options.challengeResponse;
   let decodedPaymentRequired;
 
   if (accessMode !== "agon-channel") {
-    challengeResponse = await requestGatewayRaw(flags, method, requestPath, {
-      ...options,
-      body: request.body,
-      includeAuthFlags: false,
-    });
+    if (!challengeResponse) {
+      challengeResponse = await requestGatewayRaw(flags, method, requestPath, {
+        ...options,
+        body: request.body,
+        includeAuthFlags: false,
+      });
+    }
     decodedPaymentRequired = decodeBase64Json(headerValue(challengeResponse.headers, "payment-required"));
     if (decodedPaymentRequired?.extensions?.["sign-in-with-x"]) {
       accessMode = "siwx";
@@ -562,6 +606,7 @@ async function prepareAuthRequest(flags, method, requestPath, options = {}) {
 
   return {
     version: 1,
+    kind: authKind(accessMode),
     accessMode,
     method: request.method,
     url: request.url.toString(),
@@ -569,6 +614,13 @@ async function prepareAuthRequest(flags, method, requestPath, options = {}) {
     query: request.query,
     body: request.body === undefined ? null : request.body,
     bodyHashSha256: sha256Hex(request.bodyText),
+    request: {
+      method: request.method,
+      url: request.url.toString(),
+      bodyHashSha256: sha256Hex(request.bodyText),
+    },
+    walletProfile: flags.walletProfile || process.env.AGON_WALLET_PROFILE,
+    policy: policyFromFlags(flags),
     route,
     challenge: {
       responseStatus: challengeResponse?.status,
@@ -696,7 +748,7 @@ function completeSiwx(authRequest, input) {
 
 function splitCommandLine(value) {
   const text = String(value || "").trim();
-  if (!text) throw new Error("--auth-driver requires a command.");
+  if (!text) throw new Error("A signer command is required. Pass --auth-driver or set AGON_SIGNER_COMMAND.");
   const parts = [];
   let current = "";
   let quote = null;
@@ -726,15 +778,19 @@ function splitCommandLine(value) {
   return parts;
 }
 
-function runAuthDriver(flags, authRequest) {
-  const driverParts = splitCommandLine(singleFlag(flags, "authDriver"));
+function authDriverCommand(flags) {
+  return singleFlag(flags, "authDriver") || process.env.AGON_SIGNER_COMMAND;
+}
+
+function runAuthDriver(flags, authRequest, commandValue = authDriverCommand(flags)) {
+  const driverParts = splitCommandLine(commandValue);
   const command = driverParts.shift();
   const args = [...driverParts, ...ensureArray(flags.authArg).map(String)];
   const timeout = Number(flags.authTimeoutMs || 30000);
   const result = childProcess.spawnSync(command, args, {
     input: JSON.stringify(authRequest),
     encoding: "utf8",
-    shell: false,
+    shell: process.platform === "win32" && /^(npx|npm|pnpm|yarn)$/i.test(command),
     timeout,
     maxBuffer: 5 * 1024 * 1024,
   });
@@ -812,7 +868,7 @@ Start with GET /v1/catalog and choose routes by accessMode.
 For exact routes, send the final request once to get a 402 x402 challenge, then retry the exact same method, URL, query, and body with PAYMENT-SIGNATURE or X-PAYMENT from the user's payment layer.
 For siwx routes, sign the sign-in-with-x challenge with the user's wallet and retry with SIGN-IN-WITH-X. Tokens API routes are SIWX-authenticated and free; do not use payment channels for Tokens.
 For agon-channel routes, use devnet only and send X-Agon-Request-Id plus AGON-COMMITMENT built from official devnet USDC channel metadata.
-The Agon CLI/MCP do not hold keys, sign, pay, broadcast, or edit wallet config. Use auth prepare/complete or an external auth driver for wallet-agnostic automation.`;
+The Gateway CLI/MCP do not custody keys themselves. Use AGON_SIGNER_COMMAND or --auth-driver to delegate SIWX/x402 signing to the default Agon agent wallet or any external wallet/policy system.`;
 }
 
 function authSchema() {
@@ -821,10 +877,11 @@ function authSchema() {
     commands: {
       prepare: "agon-gateway auth prepare <METHOD> <PATH> [--query k=v] [--body JSON|@file] [--address ADDRESS]",
       complete: "agon-gateway auth complete --challenge FILE|- --address ADDRESS --signature SIGNATURE",
-      call: "agon-gateway auth call <METHOD> <PATH> --auth-driver COMMAND",
+      call: "agon-gateway auth call <METHOD> <PATH> [--auth-driver COMMAND] or AGON_SIGNER_COMMAND",
     },
     authRequest: {
       version: 1,
+      kind: "siwx | x402-exact | agon-channel",
       accessMode: "siwx | exact | agon-channel",
       method: "GET | POST",
       url: "absolute gateway URL",
@@ -832,6 +889,9 @@ function authSchema() {
       query: "object; duplicate keys are arrays",
       body: "JSON body or null",
       bodyHashSha256: "sha256 of the exact JSON request body string, or empty body",
+      request: "{ method, url, bodyHashSha256 }",
+      walletProfile: "optional wallet profile hint",
+      policy: "{ maxAmountUsdPerRequest, dailyLimitUsd }",
       route: "catalog metadata when available",
       challenge: "decoded 402 Payment-Required challenge when available",
     },
@@ -873,9 +933,12 @@ async function doctor(flags) {
     routeCount: catalogRoutes(body).length,
     providers: [...new Set(catalogRoutes(body).map((route) => route.provider).filter(Boolean))],
   })).catch((error) => ({ ok: false, error: error.message }));
-  const authDriver = flags.authDriver ? {
-    command: singleFlag(flags, "authDriver"),
-    found: commandExists(singleFlag(flags, "authDriver")),
+  const signerCommand = authDriverCommand(flags);
+  const authDriver = signerCommand ? {
+    configured: true,
+    source: flags.authDriver ? "--auth-driver" : "AGON_SIGNER_COMMAND",
+    command: signerCommand,
+    found: commandExists(signerCommand),
   } : { configured: false };
 
   return {
@@ -966,8 +1029,7 @@ async function main() {
         const method = args.shift();
         const requestPath = args.shift();
         if (!method || !requestPath) throw new Error("auth call requires METHOD and PATH.");
-        if (!flags.authDriver) throw new Error("auth call requires --auth-driver.");
-        printJson(await requestGateway(flags, method, requestPath));
+        printJson(await requestGateway(flags, method, requestPath, { requireSignerOn402: true }));
         return;
       }
       throw new Error(`Unknown auth subcommand: ${subcommand}`);
@@ -1050,5 +1112,5 @@ async function main() {
 
 main().catch((error) => {
   process.stderr.write(`Error: ${error.message}\n`);
-  process.exit(1);
+  process.exitCode = 1;
 });
