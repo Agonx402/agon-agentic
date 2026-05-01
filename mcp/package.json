@@ -1,7 +1,7 @@
 {
     "name": "@agonx402/gateway-mcp",
-    "version": "0.1.5",
-    "description": "MCP server for Agon Gateway discovery, calls, and generic signer-hook auth.",
+    "version": "0.3.1",
+    "description": "MCP server for Agon Gateway discovery, calls, Tokens market data, and generic signer-hook auth.",
     "license": "MIT",
     "mcpName": "io.github.Agonx402/agon-gateway",
     "homepage": "https://github.com/Agonx402/agon-gateway-agentic#readme",

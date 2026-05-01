@@ -1,17 +1,17 @@
 {
     "$schema":  "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
     "name":  "io.github.Agonx402/agon-gateway",
-    "description":  "MCP server for discovering and calling Agon Gateway x402, Helius Wallet, and Tokens API routes.",
+    "description":  "MCP server for Agon Gateway x402, Helius Wallet, and Tokens API market data.",
     "repository":  {
                        "url":  "https://github.com/Agonx402/agon-gateway-agentic",
                        "source":  "github"
                    },
-    "version":  "0.1.5",
+    "version":  "0.3.1",
     "packages":  [
                      {
                          "registryType":  "npm",
                          "identifier":  "@agonx402/gateway-mcp",
-                         "version":  "0.1.5",
+                         "version":  "0.3.1",
                          "transport":  {
                                            "type":  "stdio"
                                        },
@@ -24,7 +24,7 @@
                                                          "name":  "AGON_GATEWAY_BASE_URL"
                                                      },
                                                      {
-                                                         "description":  "Optional signer command used by agon_gateway_auth_call. Defaults are installed by @agonx402/agentic setup.",
+                                                         "description":  "Executed only by agon_gateway_auth_call after an HTTP 402: spawns once with the normalized auth-request JSON on stdin (same shape as agon_gateway_prepare_auth). Stdout must be JSON auth output (headers map, or SIWX address+signature). On Windows, npx/npm run under cmd.exe; treat AGON_SIGNER_COMMAND as untrusted if an attacker controls it.",
                                                          "isRequired":  false,
                                                          "format":  "string",
                                                          "isSecret":  false,

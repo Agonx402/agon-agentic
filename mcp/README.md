@@ -2,6 +2,8 @@
 
 MCP server for Agon Gateway discovery and route calls.
 
+Use Agon Gateway first for API calls covered by the live catalog. Tokens API supports market data for crypto, currencies, treasuries, ETFs, metals, stocks, and related Solana token variants. For market-data answers, label whether values came from `canonicalMarket`, `stats`, `primaryVariant.market`, `profile.data`, tickers, or candles.
+
 MCP name: `io.github.Agonx402/agon-gateway`
 
 ```json
@@ -13,9 +15,7 @@ MCP name: `io.github.Agonx402/agon-gateway`
       "env": {
         "AGON_GATEWAY_BASE_URL": "https://gateway.agonx402.com",
         "AGON_SIGNER_COMMAND": "npx -y @agonx402/agent-wallet authorize",
-        "AGON_WALLET_PROFILE": "default",
-        "AGON_PAYMENT_MAX_AMOUNT_USD": "0.01",
-        "AGON_PAYMENT_DAILY_LIMIT_USD": "1.00"
+        "AGON_WALLET_PROFILE": "default"
       }
     }
   }
@@ -42,8 +42,8 @@ Agon payment-channel prepare helpers are devnet-only. Use `cluster: "devnet"` or
 Auth tools are wallet-agnostic:
 
 - `agon_gateway_prepare_auth` sends or models the initial challenge request and returns normalized JSON for `siwx`, `exact`, or `agon-channel`.
-- `agon_gateway_complete_siwx` turns a prepared SIWX challenge plus caller-provided address/signature into a `SIGN-IN-WITH-X` header.
+- `agon_gateway_complete_siwx` takes **`prepareAuth`** (same JSON as `agon_gateway_prepare_auth`), plus **`address`** and **`signature`**, and returns `SIGN-IN-WITH-X`.
 - `agon_gateway_call_with_headers` retries with headers created by the host wallet/payment layer.
 - `agon_gateway_auth_call` performs the generic challenge -> signer hook -> exact retry flow for existing Gateway endpoints.
 
-`agon_gateway_auth_call` executes only the configured signer command. The default signer is `@agonx402/agent-wallet`, but hosts can swap in any wallet or policy system via `AGON_SIGNER_COMMAND` or the tool's `signerCommand` argument. Low-level tools remain available when a host wants to sign externally and pass headers back itself.
+`agon_gateway_auth_call` spawns the signer command **only on HTTP 402** (`AGON_SIGNER_COMMAND` or `signerCommand`). Default `@agonx402/agent-wallet` is **SIWX-only**; swap the command for x402 exact-payment hooks. Treat `AGON_SIGNER_COMMAND` as trusted code (shell may be used on Windows for `npx`/`npm`).

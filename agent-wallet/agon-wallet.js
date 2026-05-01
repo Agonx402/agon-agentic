@@ -8,14 +8,13 @@ const { Keypair } = require("@solana/web3.js");
 
 const DEFAULT_PROFILE = process.env.AGON_WALLET_PROFILE || "default";
 const DEFAULT_MAINNET_CHAIN_ID = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
-const DEFAULT_MAX_AMOUNT_USD = "0.01";
-const DEFAULT_DAILY_LIMIT_USD = "1.00";
-const USDC_MAINNET_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-const USDC_DEVNET_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
 
 function usage(exitCode = 0) {
   const text = `
 Agon Agent Wallet
+
+Convenience signer for Agon Gateway Tokens API (SIWX / sign-in-with-x) only.
+For x402 exact-payment routes, configure a different signer via AGON_SIGNER_COMMAND.
 
 Usage:
   agon-wallet setup [--profile NAME] [--force]
@@ -24,10 +23,8 @@ Usage:
   agon-wallet help
 
 Environment:
-  AGON_HOME                     Defaults to ~/.agon
-  AGON_WALLET_PROFILE           Defaults to "default"
-  AGON_PAYMENT_MAX_AMOUNT_USD   Defaults to policy file or 0.01
-  AGON_PAYMENT_DAILY_LIMIT_USD  Defaults to policy file or 1.00
+  AGON_HOME               Defaults to ~/.agon
+  AGON_WALLET_PROFILE     Defaults to "default"
 `;
   process.stdout.write(text.trimStart());
   process.exit(exitCode);
@@ -69,14 +66,6 @@ function walletPath(profile = DEFAULT_PROFILE) {
   return path.join(agonHome(), "wallets", `${profile}.json`);
 }
 
-function policyPath() {
-  return path.join(agonHome(), "policy.json");
-}
-
-function spendStatePath() {
-  return path.join(agonHome(), "spend-state.json");
-}
-
 function readJson(filePath, fallback) {
   try {
     return JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -94,24 +83,6 @@ function writeJson(filePath, value, mode = 0o600) {
   } catch {
     // Some filesystems ignore chmod; best effort is enough for a convenience wallet.
   }
-}
-
-function policyFromEnvAndFile(inputPolicy = {}) {
-  const filePolicy = readJson(policyPath(), {});
-  return {
-    maxAmountUsdPerRequest: String(
-      inputPolicy.maxAmountUsdPerRequest
-      || process.env.AGON_PAYMENT_MAX_AMOUNT_USD
-      || filePolicy.maxAmountUsdPerRequest
-      || DEFAULT_MAX_AMOUNT_USD,
-    ),
-    dailyLimitUsd: String(
-      inputPolicy.dailyLimitUsd
-      || process.env.AGON_PAYMENT_DAILY_LIMIT_USD
-      || filePolicy.dailyLimitUsd
-      || DEFAULT_DAILY_LIMIT_USD,
-    ),
-  };
 }
 
 function setupWallet(flags) {
@@ -188,32 +159,6 @@ function selectedSiwxChain(challenge, requestedChainId) {
   };
 }
 
-function formatSIWSMessage(info, address) {
-  const lines = [
-    `${info.domain} wants you to sign in with your Solana account:`,
-    address,
-    "",
-  ];
-  if (info.statement) {
-    lines.push(info.statement, "");
-  }
-  lines.push(`URI: ${info.uri}`);
-  lines.push(`Version: ${info.version}`);
-  lines.push(`Chain ID: ${info.chainId}`);
-  lines.push(`Nonce: ${info.nonce}`);
-  lines.push(`Issued At: ${info.issuedAt}`);
-  if (info.expirationTime) lines.push(`Expiration Time: ${info.expirationTime}`);
-  if (info.notBefore) lines.push(`Not Before: ${info.notBefore}`);
-  if (info.requestId) lines.push(`Request ID: ${info.requestId}`);
-  if (Array.isArray(info.resources) && info.resources.length > 0) {
-    lines.push("Resources:");
-    for (const resource of info.resources) {
-      lines.push(`- ${resource}`);
-    }
-  }
-  return lines.join("\n");
-}
-
 function siwxChallengeFromInput(input) {
   return input?.challenge?.siwx || input?.challenge?.["sign-in-with-x"] || input?.challenge;
 }
@@ -228,7 +173,7 @@ function headerValue(headers, name) {
 
 async function authorizeSiwx(input, flags) {
   const challenge = siwxChallengeFromInput(input);
-  const paymentRequired = paymentRequiredFromInput(input);
+  const paymentRequired = input?.challenge?.paymentRequired || input?.paymentRequired || input?.challenge;
   if (!challenge?.info || !paymentRequired) {
     throw new Error("SIWX auth request is missing challenge info or paymentRequired.");
   }
@@ -260,85 +205,6 @@ async function authorizeSiwx(input, flags) {
   };
 }
 
-function paymentRequiredFromInput(input) {
-  return input?.challenge?.paymentRequired || input?.paymentRequired || input?.challenge;
-}
-
-function amountUsdForPayment(input, paymentRequired) {
-  const routePrice = input?.route?.priceUsd || input?.priceUsd;
-  if (routePrice !== undefined && routePrice !== null && routePrice !== "") {
-    return Number(routePrice);
-  }
-  const requirement = paymentRequired?.accepts?.[0];
-  if (!requirement) return NaN;
-  const asset = String(requirement.asset || "");
-  const amount = Number(requirement.amount || requirement.value || "NaN");
-  if (!Number.isFinite(amount)) return NaN;
-  if (asset === USDC_MAINNET_MINT || asset === USDC_DEVNET_MINT) {
-    return amount / 1_000_000;
-  }
-  return NaN;
-}
-
-function enforceRequestLimit(input, paymentRequired, policy) {
-  const amountUsd = amountUsdForPayment(input, paymentRequired);
-  if (!Number.isFinite(amountUsd)) {
-    throw new Error("Unable to estimate x402 payment amount in USD; use an external signer or include route.priceUsd.");
-  }
-  const max = Number(policy.maxAmountUsdPerRequest);
-  if (Number.isFinite(max) && amountUsd > max) {
-    throw new Error(`x402 payment $${amountUsd.toFixed(6)} exceeds maxAmountUsdPerRequest $${max.toFixed(6)}.`);
-  }
-  return amountUsd;
-}
-
-function todayKey() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function reserveDailySpend(amountUsd, policy) {
-  const limit = Number(policy.dailyLimitUsd);
-  if (!Number.isFinite(limit)) return;
-  const stateFile = spendStatePath();
-  const state = readJson(stateFile, { version: 1, days: {} });
-  const key = todayKey();
-  const day = state.days[key] || { authorizedUsd: 0 };
-  const next = Number(day.authorizedUsd || 0) + amountUsd;
-  if (next > limit) {
-    throw new Error(`x402 authorized daily total $${next.toFixed(6)} exceeds dailyLimitUsd $${limit.toFixed(6)}.`);
-  }
-  state.days[key] = { authorizedUsd: next, updatedAt: new Date().toISOString() };
-  writeJson(stateFile, state);
-}
-
-async function authorizeX402(input, flags) {
-  const paymentRequired = paymentRequiredFromInput(input);
-  if (!paymentRequired?.accepts?.length) {
-    throw new Error("x402 auth request is missing paymentRequired.accepts.");
-  }
-  const policy = policyFromEnvAndFile(input.policy);
-  const amountUsd = enforceRequestLimit(input, paymentRequired, policy);
-  const { signer } = await loadSolanaSigner(flags);
-  const { x402Client, x402HTTPClient } = await import("@x402/core/client");
-  const { registerExactSvmScheme } = await import("@x402/svm/exact/client");
-  const { toClientSvmSigner } = await import("@x402/svm");
-
-  const client = registerExactSvmScheme(new x402Client(), {
-    signer: toClientSvmSigner(signer),
-  });
-  const httpClient = new x402HTTPClient(client);
-  const payload = await httpClient.createPaymentPayload(paymentRequired);
-  const headers = httpClient.encodePaymentSignatureHeader(payload);
-  reserveDailySpend(amountUsd, policy);
-  return {
-    headers,
-    address: String(signer.address),
-    chainId: paymentRequired.accepts[0]?.network,
-    amountUsd,
-    policy,
-  };
-}
-
 async function readStdinJson() {
   const chunks = [];
   for await (const chunk of process.stdin) chunks.push(chunk);
@@ -361,7 +227,7 @@ async function authorize(flags) {
   if (kind === "siwx") {
     output = await authorizeSiwx(input, flags);
   } else if (kind === "x402-exact" || kind === "exact") {
-    output = await authorizeX402(input, flags);
+    throw new Error("This wallet only signs SIWX (Tokens API). For x402 exact routes, set AGON_SIGNER_COMMAND to a payment-capable signer.");
   } else {
     throw new Error(`Unsupported auth request kind/accessMode: ${kind || input.accessMode || "unknown"}.`);
   }

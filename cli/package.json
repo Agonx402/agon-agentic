@@ -1,7 +1,7 @@
 {
   "name": "@agonx402/gateway-cli",
-  "version": "0.1.3",
-  "description": "CLI for discovering and calling Agon Gateway routes with generic signer hooks.",
+  "version": "0.3.0",
+  "description": "CLI for discovering, batching, and calling Agon Gateway routes with generic signer hooks.",
   "license": "MIT",
   "homepage": "https://github.com/Agonx402/agon-gateway-agentic#readme",
   "repository": {
@@ -21,7 +21,8 @@
     "agents"
   ],
   "bin": {
-    "agon-gateway": "./agon-gateway.js"
+    "agon-gateway": "./agon-gateway.js",
+    "agon": "./agon-gateway.js"
   },
   "files": [
     "agon-gateway.js",

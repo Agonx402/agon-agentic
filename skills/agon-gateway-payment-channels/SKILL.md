@@ -1,6 +1,12 @@
 ---
 name: agon-gateway-payment-channels
-description: Use when integrating Agon Gateway with Agon Protocol payment channels, authorizing gateway API calls with signed cumulative commitments, locking official devnet USDC into merchant channels, or implementing channel-backed access for Solana RPC, DAS, or Helius Wallet routes.
+description: |
+  Sub-skill for `accessMode: "agon-channel"` Gateway routes only -- devnet Solana RPC/DAS/Helius
+  Wallet calls authorized by signed cumulative Agon commitments and locked official devnet USDC.
+  Use only when implementing or debugging channel-backed authorization (X-Agon-Request-Id +
+  AGON-COMMITMENT headers, channel locking, settlement bundles, BLS clearing). Does NOT cover
+  market data, asset prices, Tokens API SIWX, or mainnet RPC/DAS/Wallet -- those route to the
+  `agon-gateway` skill instead.
 ---
 
 # Agon Gateway Payment Channels

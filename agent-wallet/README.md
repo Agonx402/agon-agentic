@@ -1,9 +1,8 @@
 # @agonx402/agent-wallet
 
-Generic local agent wallet and signer hook for Agon Gateway.
+Default **SIWX-only** signer for Agon Gateway **Tokens API** routes (`sign-in-with-x`). It keeps first-time agent setup low-friction: create a wallet, point `AGON_SIGNER_COMMAND` at `authorize`.
 
-The wallet is a convenience agent wallet. It is intended for SIWX, small x402
-payments, and development workflows, not high-value custody.
+**Not supported here:** x402 exact-payment signing. For paid RPC/DAS/Helius-style exact routes, use a different `AGON_SIGNER_COMMAND` that returns `PAYMENT-SIGNATURE` / `X-PAYMENT`.
 
 ```bash
 npx -y @agonx402/agent-wallet setup --profile default
@@ -11,8 +10,7 @@ npx -y @agonx402/agent-wallet show --profile default
 npx -y @agonx402/agent-wallet authorize --stdin
 ```
 
-`authorize` reads a normalized Agon auth request from stdin and returns headers
-or signer output:
+`authorize` reads a normalized **`kind: "siwx"`** auth request from stdin and returns signer output:
 
 ```json
 {
@@ -24,5 +22,4 @@ or signer output:
 }
 ```
 
-External wallets can replace this package by implementing the same stdin/stdout
-contract and setting `AGON_SIGNER_COMMAND`.
+External wallets replace this hook with the **same stdin JSON / stdout JSON** contract via `AGON_SIGNER_COMMAND`.

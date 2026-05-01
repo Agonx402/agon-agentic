@@ -97,7 +97,7 @@ const tools = [
   },
   {
     name: "agon_gateway_call",
-    description: "Call an Agon Gateway route. Use without payment/SIWX headers to issue a challenge, then retry with PAYMENT-SIGNATURE, X-PAYMENT, or SIGN-IN-WITH-X.",
+    description: "Call an Agon Gateway route. Use without payment/SIWX headers to issue a challenge, then retry with PAYMENT-SIGNATURE, X-PAYMENT, or SIGN-IN-WITH-X. Devnet RPC/DAS/Wallet routes settle in devnet USDC; mainnet routes settle in mainnet USDC; Tokens API SIWX routes are free.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -147,13 +147,16 @@ const tools = [
   },
   {
     name: "agon_gateway_complete_siwx",
-    description: "Build a SIGN-IN-WITH-X header from a prepared SIWX challenge plus a wallet address and signature.",
+    description: "Build a SIGN-IN-WITH-X header from a prepared auth envelope plus a wallet address and signature.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["challenge", "address", "signature"],
+      required: ["prepareAuth", "address", "signature"],
       properties: {
-        challenge: { type: "object", description: "The JSON returned by agon_gateway_prepare_auth." },
+        prepareAuth: {
+          type: "object",
+          description: "Full JSON object returned by agon_gateway_prepare_auth (includes challenge.siwx after a 402).",
+        },
         address: { type: "string" },
         signature: { type: "string" },
         signatureEncoding: { type: "string", enum: ["hex", "base58", "base64", "base64url"], default: "base58" },
@@ -163,7 +166,7 @@ const tools = [
   },
   {
     name: "agon_gateway_call_with_headers",
-    description: "Call a Gateway route with caller-supplied auth/payment headers. MCP does not sign, pay, or execute wallet commands.",
+    description: "Call a Gateway route with caller-supplied auth/payment headers. MCP does not sign, pay, or execute wallet commands. Devnet routes expect devnet-USDC payment headers; mainnet routes expect mainnet-USDC headers; Tokens API SIWX routes are free.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -185,7 +188,7 @@ const tools = [
   },
   {
     name: "agon_gateway_auth_call",
-    description: "Call any Agon Gateway route, use a configured signer hook for SIWX/x402 challenges, and retry the exact same request.",
+    description: "Call any Agon Gateway route, use a configured signer hook for SIWX/x402 challenges, and retry the exact same request. Devnet RPC/DAS/Wallet routes pay in devnet USDC; mainnet RPC/DAS/Wallet routes pay in mainnet USDC; Tokens API SIWX routes (market data for crypto, stocks, ETFs, treasuries, metals, currencies) are free on either cluster. The signer must hold the USDC mint for the cluster of the route.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -209,9 +212,95 @@ const tools = [
       },
     },
   },
+  {
+    name: "agon_token_quote",
+    description: "Get current price, market cap, 24h volume, supply, and canonical market view for any Agon-tracked asset: crypto (BTC, SOL, ETH, USDC, USDT, ...), tokenized stock (TSLA, AAPL, MSFT, NVDA, ...), ETF, treasury, metal (gold, silver), or fiat currency. Free over SIWX -- no payment required. Pass either an Agon canonical assetId (e.g. 'bitcoin', 'solana', 'tesla', 'gold') or a Solana mint to look up a specific tokenized variant.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        baseUrl: { type: "string" },
+        assetId: { type: "string", description: "Canonical Agon assetId (e.g. 'bitcoin', 'solana', 'tesla', 'gold', 'usd'). Use agon_token_resolve first if only a free-text ticker/name is known." },
+        mint: { type: "string", description: "Solana mint for a tokenized variant. When set, calls /v1/x402/tokens/assets/:assetId/variant-market?mint=<mint>. Requires assetId." },
+        signerCommand: { type: "string", description: "Signer hook command. Defaults to AGON_SIGNER_COMMAND. Tokens routes use SIWX (free)." },
+        walletProfile: { type: "string" },
+      },
+      required: ["assetId"],
+    },
+  },
+  {
+    name: "agon_token_resolve",
+    description: "Resolve a free-text reference (human name, ticker, or ambiguous phrase like 'tesla', 'gold', 'btc', 'BTC ETF') to a canonical Agon assetId, primary mint, and preferred market view. Free over SIWX. Call this first when the user gives a name/ticker rather than a known assetId.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        baseUrl: { type: "string" },
+        ref: { type: "string", description: "Free-text reference: name, ticker, symbol, or ambiguous phrase." },
+        signerCommand: { type: "string" },
+        walletProfile: { type: "string" },
+      },
+      required: ["ref"],
+    },
+  },
+  {
+    name: "agon_token_chart",
+    description: "Get OHLCV/price chart candles for any Agon-tracked asset (crypto, tokenized stock, ETF, treasury, metal, currency) over a given interval. Free over SIWX. Use for historical prices, custom time windows (24h, 7D, 30D, ...), or candle aggregation.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        baseUrl: { type: "string" },
+        assetId: { type: "string", description: "Canonical Agon assetId." },
+        interval: { type: "string", description: "Candle interval, e.g. '1H', '4H', '1D', '1W'. Defaults to '1D'." },
+        from: { type: "string", description: "Optional ISO timestamp or unix-ms lower bound." },
+        to: { type: "string", description: "Optional ISO timestamp or unix-ms upper bound." },
+        signerCommand: { type: "string" },
+        walletProfile: { type: "string" },
+      },
+      required: ["assetId"],
+    },
+  },
+  {
+    name: "agon_token_search",
+    description: "Search Agon Tokens for assets matching a free-text query (e.g. 'bitcoin etf', 'tokenized treasury', 'gold mining'). Returns ranked candidates with assetIds, symbols, and short descriptions. Free over SIWX. Prefer agon_token_resolve when the query is a single name/ticker; use search when the query is broader or ambiguous.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        baseUrl: { type: "string" },
+        q: { type: "string", description: "Free-text query." },
+        limit: { type: "integer", description: "Max results, 1-50. Defaults to 10.", minimum: 1, maximum: 50 },
+        signerCommand: { type: "string" },
+        walletProfile: { type: "string" },
+      },
+      required: ["q"],
+    },
+  },
+  {
+    name: "agon_token_batch_quote",
+    description: "Get current quotes for multiple Solana mints in a single call. Up to 50 mints uses GET /v1/x402/tokens/assets/variant-markets; >50 uses POST /v1/x402/tokens/assets/market-snapshots (max 250). Free over SIWX. Use when you have several known mints and want one round trip.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        baseUrl: { type: "string" },
+        mints: {
+          type: "array",
+          items: { type: "string" },
+          minItems: 1,
+          maxItems: 250,
+          description: "Solana mint addresses (base58). 1-50 issues a GET; 51-250 issues a POST.",
+        },
+        signerCommand: { type: "string" },
+        walletProfile: { type: "string" },
+      },
+      required: ["mints"],
+    },
+  },
 ];
 
-let inputBuffer = Buffer.alloc(0);
+let inputBuffer = "";
 
 function normalizeBaseUrl(baseUrl) {
   return String(baseUrl || DEFAULT_BASE_URL).replace(/\/+$/, "");
@@ -226,8 +315,7 @@ function jsonContent(value) {
 }
 
 function writeMessage(message) {
-  const json = JSON.stringify(message);
-  process.stdout.write(`Content-Length: ${Buffer.byteLength(json, "utf8")}\r\n\r\n${json}`);
+  process.stdout.write(`${JSON.stringify(message)}\n`);
 }
 
 function sendResult(id, result) {
@@ -248,24 +336,14 @@ function sendError(id, code, message, data) {
 
 function parseMessages() {
   const messages = [];
-  while (inputBuffer.length > 0) {
-    const headerEnd = inputBuffer.indexOf("\r\n\r\n");
-    if (headerEnd === -1) break;
-
-    const headerText = inputBuffer.slice(0, headerEnd).toString("utf8");
-    const match = /content-length:\s*(\d+)/i.exec(headerText);
-    if (!match) {
-      throw new Error("Missing Content-Length header.");
+  let newlineIndex = inputBuffer.indexOf("\n");
+  while (newlineIndex !== -1) {
+    const line = inputBuffer.slice(0, newlineIndex).replace(/\r$/, "");
+    inputBuffer = inputBuffer.slice(newlineIndex + 1);
+    if (line.length > 0) {
+      messages.push(JSON.parse(line));
     }
-
-    const length = Number(match[1]);
-    const bodyStart = headerEnd + 4;
-    const bodyEnd = bodyStart + length;
-    if (inputBuffer.length < bodyEnd) break;
-
-    const body = inputBuffer.slice(bodyStart, bodyEnd).toString("utf8");
-    inputBuffer = inputBuffer.slice(bodyEnd);
-    messages.push(JSON.parse(body));
+    newlineIndex = inputBuffer.indexOf("\n");
   }
   return messages;
 }
@@ -514,10 +592,6 @@ function decodeBase64Json(value) {
   }
 }
 
-function extractSolanaChainReference(chainId) {
-  return String(chainId).split(":")[1] || "";
-}
-
 function formatSIWSMessage(info, address) {
   const lines = [
     `${info.domain} wants you to sign in with your Solana account:`,
@@ -530,7 +604,7 @@ function formatSIWSMessage(info, address) {
   lines.push(
     `URI: ${info.uri}`,
     `Version: ${info.version}`,
-    `Chain ID: ${extractSolanaChainReference(info.chainId)}`,
+    `Chain ID: ${info.chainId}`,
     `Nonce: ${info.nonce}`,
     `Issued At: ${info.issuedAt}`,
   );
@@ -924,14 +998,102 @@ async function callTool(name, args) {
     case "agon_gateway_prepare_auth":
       return { content: jsonContent(await prepareAuth(args)) };
 
-    case "agon_gateway_complete_siwx":
-      return { content: jsonContent(completeSiwx(args.challenge, args)) };
+    case "agon_gateway_complete_siwx": {
+      const { prepareAuth, address, signature, signatureEncoding, chainId } = args;
+      if (!prepareAuth) {
+        throw new Error("agon_gateway_complete_siwx requires prepareAuth (JSON from agon_gateway_prepare_auth).");
+      }
+      return { content: jsonContent(completeSiwx(prepareAuth, { address, signature, signatureEncoding, chainId })) };
+    }
 
     case "agon_gateway_call_with_headers":
       return { content: jsonContent(await fetchGateway(args, args.method, args.path)) };
 
     case "agon_gateway_auth_call":
       return { content: jsonContent(await authCall(args)) };
+
+    case "agon_token_quote": {
+      if (!args.assetId) throw new Error("agon_token_quote requires assetId.");
+      const path = args.mint
+        ? `/v1/x402/tokens/assets/${encodeURIComponent(args.assetId)}/variant-market`
+        : `/v1/x402/tokens/assets/${encodeURIComponent(args.assetId)}`;
+      const query = args.mint ? { mint: args.mint } : undefined;
+      return {
+        content: jsonContent(await authCall({
+          ...args,
+          method: "GET",
+          path,
+          query,
+        })),
+      };
+    }
+
+    case "agon_token_resolve": {
+      if (!args.ref) throw new Error("agon_token_resolve requires ref.");
+      return {
+        content: jsonContent(await authCall({
+          ...args,
+          method: "GET",
+          path: "/v1/x402/tokens/assets/resolve",
+          query: { ref: args.ref },
+        })),
+      };
+    }
+
+    case "agon_token_chart": {
+      if (!args.assetId) throw new Error("agon_token_chart requires assetId.");
+      const query = { interval: args.interval || "1D" };
+      if (args.from !== undefined) query.from = args.from;
+      if (args.to !== undefined) query.to = args.to;
+      return {
+        content: jsonContent(await authCall({
+          ...args,
+          method: "GET",
+          path: `/v1/x402/tokens/assets/${encodeURIComponent(args.assetId)}/price-chart`,
+          query,
+        })),
+      };
+    }
+
+    case "agon_token_search": {
+      if (!args.q) throw new Error("agon_token_search requires q.");
+      const query = { q: args.q, limit: args.limit ?? 10 };
+      return {
+        content: jsonContent(await authCall({
+          ...args,
+          method: "GET",
+          path: "/v1/x402/tokens/assets/search",
+          query,
+        })),
+      };
+    }
+
+    case "agon_token_batch_quote": {
+      if (!Array.isArray(args.mints) || args.mints.length === 0) {
+        throw new Error("agon_token_batch_quote requires a non-empty mints array.");
+      }
+      if (args.mints.length > 250) {
+        throw new Error("agon_token_batch_quote accepts at most 250 mints.");
+      }
+      if (args.mints.length <= 50) {
+        return {
+          content: jsonContent(await authCall({
+            ...args,
+            method: "GET",
+            path: "/v1/x402/tokens/assets/variant-markets",
+            query: { mints: args.mints.join(",") },
+          })),
+        };
+      }
+      return {
+        content: jsonContent(await authCall({
+          ...args,
+          method: "POST",
+          path: "/v1/x402/tokens/assets/market-snapshots",
+          body: { mints: args.mints },
+        })),
+      };
+    }
 
     default:
       throw new Error(`Unknown tool: ${name}`);
@@ -1030,9 +1192,11 @@ async function handleRequest(message) {
   }
 }
 
+process.stdin.setEncoding("utf8");
+
 process.stdin.on("data", async (chunk) => {
   try {
-    inputBuffer = Buffer.concat([inputBuffer, chunk]);
+    inputBuffer += chunk;
     const messages = parseMessages();
     for (const message of messages) {
       await handleRequest(message);

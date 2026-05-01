@@ -1,7 +1,7 @@
 {
   "name": "@agonx402/agentic",
-  "version": "0.1.1",
-  "description": "Installer for Agon Gateway and Agon Protocol agent skills, MCP servers, and signer hooks.",
+  "version": "0.3.1",
+  "description": "Installer for Agon Gateway and Agon Protocol agent skills, default SIWX signer wallet, MCP servers, and signer hooks.",
   "license": "MIT",
   "homepage": "https://github.com/Agonx402/agon-gateway-agentic#readme",
   "repository": {

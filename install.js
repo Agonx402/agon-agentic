@@ -12,8 +12,6 @@ const PROTOCOL_MCP_PACKAGE = "@agonx402/protocol-mcp";
 const AGENT_WALLET_PACKAGE = "@agonx402/agent-wallet";
 const DEFAULT_GATEWAY_BASE_URL = "https://gateway.agonx402.com";
 const DEFAULT_WALLET_PROFILE = "default";
-const DEFAULT_MAX_AMOUNT_USD = "0.01";
-const DEFAULT_DAILY_LIMIT_USD = "1.00";
 const SKILLS = [
   {
     name: "agon-gateway",
@@ -34,16 +32,20 @@ function usage(exitCode = 0) {
 Agon Agentic Installer
 
 Usage:
-  agonx402-agentic install-skills [--target agents|codex|all] [--target-dir PATH] [--dry-run]
+  agonx402-agentic install-skills [--target agents|codex|claude|all] [--target-dir PATH] [--wallet-profile NAME] [--skip-wallet-setup] [--dry-run]
   agonx402-agentic setup [--target codex|claude-desktop|cursor|windsurf|generic|all] [--dry-run]
-                         [--wallet-profile NAME] [--max-amount-usd USD] [--daily-limit-usd USD]
+                         [--wallet-profile NAME]
   agonx402-agentic list
   agonx402-agentic doctor
   agonx402-agentic help
 
+Default install-skills target is "all" -- installs into ~/.agents/skills, ~/.codex/skills,
+and ~/.claude/skills so Cursor, Claude Code, and Codex all see the bundled skills.
+
 Examples:
   npx -y ${PACKAGE_NAME} install-skills
   npx -y ${PACKAGE_NAME} install-skills --target codex
+  npx -y ${PACKAGE_NAME} install-skills --target claude
   npx -y ${PACKAGE_NAME} install-skills --target all
   npx -y ${PACKAGE_NAME} setup --target all
 `;
@@ -99,6 +101,7 @@ function defaultTargetRoots() {
   return {
     agents: path.join(home, ".agents", "skills"),
     codex: path.join(home, ".codex", "skills"),
+    claude: path.join(home, ".claude", "skills"),
   };
 }
 
@@ -107,14 +110,15 @@ function resolveInstallTargets(flags) {
     return [path.resolve(String(flags.targetDir))];
   }
 
-  const target = String(flags.target || "agents").toLowerCase();
+  const target = String(flags.target || "all").toLowerCase();
   const roots = defaultTargetRoots();
 
   if (target === "agents") return [roots.agents];
   if (target === "codex") return [roots.codex];
-  if (target === "all") return [roots.agents, roots.codex];
+  if (target === "claude") return [roots.claude];
+  if (target === "all") return [roots.agents, roots.codex, roots.claude];
 
-  throw new Error("Invalid --target. Use agents, codex, or all.");
+  throw new Error("Invalid --target. Use agents, codex, claude, or all.");
 }
 
 function assertBundledSkills() {
@@ -164,6 +168,7 @@ function installSkills(flags) {
 
   const dryRun = Boolean(flags.dryRun);
   const quiet = Boolean(flags.quiet);
+  const skipWalletSetup = Boolean(flags.skipWalletSetup);
   const targets = resolveInstallTargets(flags);
 
   for (const targetRoot of targets) {
@@ -184,6 +189,13 @@ function installSkills(flags) {
         process.stdout.write(`  installed ${skill.name}\n`);
       }
     }
+  }
+
+  if (!skipWalletSetup) {
+    if (!quiet) {
+      process.stdout.write(`${dryRun ? "[dry-run] " : ""}Setting up default Agon agent wallet for SIWX/auth calls\n`);
+    }
+    setupWallet(flags);
   }
 
   if (!quiet) {
@@ -218,8 +230,9 @@ function doctor() {
   process.stdout.write(`Node: ${process.version}\n`);
   process.stdout.write(`Package root: ${packageRoot()}\n`);
   process.stdout.write(`Bundled skills root: ${skillsRoot()}\n`);
-  process.stdout.write(`Default target: ${roots.agents}\n`);
+  process.stdout.write(`Agents target: ${roots.agents}\n`);
   process.stdout.write(`Codex target: ${roots.codex}\n`);
+  process.stdout.write(`Claude target: ${roots.claude}\n`);
   process.stdout.write("\nSkill bundle check:\n");
 
   for (const skill of SKILLS) {
@@ -240,35 +253,6 @@ function agonHome() {
   return path.resolve(process.env.AGON_HOME || path.join(os.homedir(), ".agon"));
 }
 
-function setupPolicy(flags) {
-  const policy = {
-    maxAmountUsdPerRequest: String(flags.maxAmountUsd || DEFAULT_MAX_AMOUNT_USD),
-    dailyLimitUsd: String(flags.dailyLimitUsd || DEFAULT_DAILY_LIMIT_USD),
-  };
-  const filePath = path.join(agonHome(), "policy.json");
-  const serialized = `${JSON.stringify(policy, null, 2)}\n`;
-  const existing = readTextFile(filePath);
-  if (flags.dryRun) {
-    process.stdout.write(existing === serialized
-      ? `[dry-run] Agon policy already up to date ${filePath}\n`
-      : `[dry-run] write ${filePath}: ${JSON.stringify(policy)}\n`);
-    return policy;
-  }
-  if (existing === serialized) {
-    process.stdout.write(`Agon policy already up to date ${filePath}\n`);
-    return policy;
-  }
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, serialized, { mode: 0o600 });
-  try {
-    fs.chmodSync(filePath, 0o600);
-  } catch {
-    // Best effort on platforms/filesystems that do not support chmod.
-  }
-  process.stdout.write(`Wrote Agon policy ${filePath}\n`);
-  return policy;
-}
-
 function setupWallet(flags) {
   const profile = String(flags.walletProfile || DEFAULT_WALLET_PROFILE);
   const args = ["-y", AGENT_WALLET_PACKAGE, "setup", "--profile", profile];
@@ -281,19 +265,17 @@ function setupWallet(flags) {
     shell: process.platform === "win32",
     stdio: ["ignore", "pipe", "pipe"],
   });
-  if (result.stdout) process.stdout.write(result.stdout);
-  if (result.stderr) process.stderr.write(result.stderr);
+  if (!flags.quiet && result.stdout) process.stdout.write(result.stdout);
+  if (!flags.quiet && result.stderr) process.stderr.write(result.stderr);
   if (result.error) throw new Error(`Failed to run ${AGENT_WALLET_PACKAGE}: ${result.error.message}`);
   if (result.status !== 0) throw new Error(`${AGENT_WALLET_PACKAGE} setup exited with status ${result.status}.`);
 }
 
-function mcpEnv(flags, policy) {
+function mcpEnv(flags) {
   return {
     AGON_GATEWAY_BASE_URL: String(flags.gatewayBaseUrl || DEFAULT_GATEWAY_BASE_URL),
     AGON_SIGNER_COMMAND: String(flags.signerCommand || `npx -y ${AGENT_WALLET_PACKAGE} authorize`),
     AGON_WALLET_PROFILE: String(flags.walletProfile || DEFAULT_WALLET_PROFILE),
-    AGON_PAYMENT_MAX_AMOUNT_USD: String(policy.maxAmountUsdPerRequest),
-    AGON_PAYMENT_DAILY_LIMIT_USD: String(policy.dailyLimitUsd),
   };
 }
 
@@ -482,10 +464,10 @@ function setupTargets(flags) {
   return [target];
 }
 
-function registerMcpClients(flags, policy) {
+function registerMcpClients(flags) {
   const adapters = clientAdapters();
   const targets = setupTargets(flags);
-  const env = mcpEnv(flags, policy);
+  const env = mcpEnv(flags);
   const all = String(flags.target || "all").toLowerCase() === "all";
   for (const target of targets) {
     const adapter = adapters[target];
@@ -500,26 +482,38 @@ function registerMcpClients(flags, policy) {
 function setup(flags) {
   const dryRun = Boolean(flags.dryRun);
   process.stdout.write(`${dryRun ? "[dry-run] " : ""}Setting up Agon agentic tools\n`);
-  installSkills({ target: "agents", dryRun, quiet: true });
-  if (!dryRun) process.stdout.write("Installed Agon skills into the generic agent skills directory.\n");
-  const policy = setupPolicy(flags);
+  installSkills({ target: "all", dryRun, quiet: true, skipWalletSetup: true });
+  if (!dryRun) process.stdout.write("Installed Agon skills into agents, codex, and claude skill directories.\n");
   setupWallet(flags);
-  registerMcpClients(flags, policy);
+  registerMcpClients(flags);
 }
 
 function printSetup() {
   process.stdout.write(`Next steps:
 
 Gateway CLI:
+  npx -y @agonx402/gateway-cli -p bitcoin
+  npx -y @agonx402/gateway-cli quote usdt --json
+  npx -y @agonx402/gateway-cli price bitcoin solana usdt
+  npx -y @agonx402/gateway-cli volume tesla gold --json
+  npx -y @agonx402/gateway-cli liquidity usdc usdt
+  npx -y @agonx402/gateway-cli search "bitcoin etf" --limit 5
+  npx -y @agonx402/gateway-cli risk usdt
+  npx -y @agonx402/gateway-cli chart solana --interval 1D
   npx -y @agonx402/gateway-cli catalog
   npx -y @agonx402/gateway-cli auth call GET /v1/x402/tokens/assets/search --query q=solana --query limit=1
+  npx -y @agonx402/gateway-cli auth call GET /v1/x402/tokens/assets/tesla/profile
+
+Low-latency quote loops:
+  Use npx for setup or one-off calls. For repeated market-data calls, install/use a fixed gateway-cli executable and set AGON_SIGNER_COMMAND to a fixed signer command instead of spawning npx per request.
+  Known assets should call direct Tokens routes such as /v1/x402/tokens/assets/solana or /v1/x402/tokens/assets/usd/variant-market?mint=Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB.
 
 Protocol CLI:
   npx -y @agonx402/protocol-cli config
   npx -y @agonx402/protocol-cli token show
 
 Agent wallet:
-  npx -y @agonx402/agent-wallet setup --profile default
+  npx -y @agonx402/agent-wallet show --profile default
 
 MCP server commands:
   npx -y @agonx402/gateway-mcp
@@ -534,9 +528,7 @@ Example MCP config:
       "env": {
         "AGON_GATEWAY_BASE_URL": "https://gateway.agonx402.com",
         "AGON_SIGNER_COMMAND": "npx -y @agonx402/agent-wallet authorize",
-        "AGON_WALLET_PROFILE": "default",
-        "AGON_PAYMENT_MAX_AMOUNT_USD": "0.01",
-        "AGON_PAYMENT_DAILY_LIMIT_USD": "1.00"
+        "AGON_WALLET_PROFILE": "default"
       }
     },
     "agon-protocol": {
@@ -547,10 +539,11 @@ Example MCP config:
 }
 
 Notes:
+- \`install-skills\` installs the bundled skills and creates the default SIWX signer wallet. Use \`--skip-wallet-setup\` only when another signer is configured.
 - Payment-channel routes are devnet-only in v1.
-- Tokens SIWX routes do not use payment channels.
+- Tokens SIWX routes do not use payment channels and cover market data for crypto, currencies, treasuries, ETFs, metals, and stocks.
 - Run \`npx -y @agonx402/agentic setup --target all\` for skills, default wallet, policy, and MCP registration.
-- The default wallet is a convenience agent wallet; use AGON_SIGNER_COMMAND to swap in any wallet or policy system.
+- The default \`agon-wallet\` signer is SIWX-only (Tokens API). For x402 exact-payment routes set \`AGON_SIGNER_COMMAND\` to a payment-capable hook.
 `);
 }
 

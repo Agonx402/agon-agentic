@@ -150,7 +150,7 @@ const tools = [
   },
 ];
 
-let inputBuffer = Buffer.alloc(0);
+let inputBuffer = "";
 
 function content(text) {
   return [{ type: "text", text }];
@@ -175,8 +175,7 @@ function bigintJson(value) {
 }
 
 function writeMessage(message) {
-  const json = JSON.stringify(message);
-  process.stdout.write(`Content-Length: ${Buffer.byteLength(json, "utf8")}\r\n\r\n${json}`);
+  process.stdout.write(`${JSON.stringify(message)}\n`);
 }
 
 function sendResult(id, result) {
@@ -189,19 +188,12 @@ function sendError(id, code, message, data) {
 
 function parseMessages() {
   const messages = [];
-  while (inputBuffer.length > 0) {
-    const headerEnd = inputBuffer.indexOf("\r\n\r\n");
-    if (headerEnd === -1) break;
-    const headerText = inputBuffer.slice(0, headerEnd).toString("utf8");
-    const match = /content-length:\s*(\d+)/i.exec(headerText);
-    if (!match) throw new Error("Missing Content-Length header.");
-    const length = Number(match[1]);
-    const bodyStart = headerEnd + 4;
-    const bodyEnd = bodyStart + length;
-    if (inputBuffer.length < bodyEnd) break;
-    const body = inputBuffer.slice(bodyStart, bodyEnd).toString("utf8");
-    inputBuffer = inputBuffer.slice(bodyEnd);
-    messages.push(JSON.parse(body));
+  let newlineIndex = inputBuffer.indexOf("\n");
+  while (newlineIndex !== -1) {
+    const line = inputBuffer.slice(0, newlineIndex).replace(/\r$/, "");
+    inputBuffer = inputBuffer.slice(newlineIndex + 1);
+    if (line.length > 0) messages.push(JSON.parse(line));
+    newlineIndex = inputBuffer.indexOf("\n");
   }
   return messages;
 }
@@ -388,9 +380,11 @@ async function handleRequest(message) {
   }
 }
 
+process.stdin.setEncoding("utf8");
+
 process.stdin.on("data", async (chunk) => {
   try {
-    inputBuffer = Buffer.concat([inputBuffer, chunk]);
+    inputBuffer += chunk;
     for (const message of parseMessages()) await handleRequest(message);
   } catch (error) {
     sendError(null, -32700, error.message || "Parse error");
