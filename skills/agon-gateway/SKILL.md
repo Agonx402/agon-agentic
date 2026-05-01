@@ -68,22 +68,47 @@ Use this skill to discover and call Agon Gateway routes safely. Agon Gateway exp
 - **Is:** the one-shot installer. `setup --target all` copies skills into `~/.agents/skills`, `~/.codex/skills`, `~/.claude/skills`, creates the default SIWX wallet at `~/.agon/wallets/default.json`, runs `npm install -g @agonx402/gateway-cli @agonx402/agent-wallet @agonx402/protocol-cli` so `agon` / `agon-gateway` / `agon-wallet` / `agon-protocol` land on PATH, copies `llm.txt` to `~/.agon/llm.txt`, and registers Agon MCP servers in Codex, Claude Desktop, Claude Code, Cursor, Windsurf, and a generic config.
 - **Is not:** a tool runner. Its only commands are `setup`, `install-skills`, `list`, `doctor`, `help`. `npx -y @agonx402/agentic agon ...` fails with "Unknown command: agon". After `setup`, use the bare `agon` / `agon-gateway` / `agon-wallet` / `agon-protocol` bins directly (step 2) or the MCP tools (step 1).
 
-### Multi-asset / batch on Windows / PowerShell
+### Multi-asset prices — DO THIS FIRST
 
-Inline JSON arrays as CLI arguments break under PowerShell's argument quoting. For `batch`, write the JSON to a file and pass `@file`:
+For "give me prices for X, Y, Z" the canonical command is positional. No JSON, no shell quoting, no `@file`, works identically on PowerShell / cmd / bash / zsh:
 
-```powershell
-'[{"method":"GET","path":"/v1/x402/tokens/assets/solana"},{"method":"GET","path":"/v1/x402/tokens/assets/bitcoin"},{"method":"GET","path":"/v1/x402/tokens/assets/gold"},{"method":"GET","path":"/v1/x402/tokens/assets/tesla"}]' | Set-Content -Encoding utf8 batch.json
-npx -y @agonx402/gateway-cli batch @batch.json
+```text
+agon quote bitcoin solana ethereum gold tesla
+agon price bitcoin solana ethereum gold tesla   # alias of quote, same output
 ```
 
-On bash/zsh, single-quoted inline JSON works:
+Both accept any mix of canonical assetIds (`bitcoin`, `solana`, `tesla`, `gold`, `usd`, ...) and free-text refs (`btc`, `BTC`, `Tesla`, `tokenized treasuries`). The CLI resolves each, fans out the underlying GETs in parallel, reuses the cached SIWX bearer, and prints one table.
+
+For batch quotes by Solana mint, use `agon batch-quote <mint1> <mint2> ...` (one round trip via `/v1/x402/tokens/assets/variant-markets`).
+
+When the MCP tools are wired up (Claude Desktop, Claude Code, Cursor, Codex), prefer them — they sidestep shell quoting entirely:
+
+- `agon_token_quote` — single asset.
+- `agon_token_batch_quote` — many mints in one call.
+- `agon_token_resolve`, `agon_token_search`, `agon_token_chart`.
+
+### `agon batch` (advanced: arbitrary route mixes)
+
+`agon batch` is for mixing **different** routes in one process — for example, one `/assets/bitcoin` GET plus one `/wallet/balances` POST. For "just prices for many assets", use `agon quote A B C D` instead.
+
+If you genuinely need `batch`, prefer inline JSON on bash/zsh:
 
 ```bash
-npx -y @agonx402/gateway-cli batch '[{"method":"GET","path":"/v1/x402/tokens/assets/solana"},{"method":"GET","path":"/v1/x402/tokens/assets/bitcoin"}]'
+agon batch '[{"method":"GET","path":"/v1/x402/tokens/assets/solana"},{"method":"GET","path":"/v1/x402/tokens/assets/bitcoin"}]'
 ```
 
-The MCP `agon_token_batch_quote` tool sidesteps the shell entirely — prefer it when both options exist.
+On Windows PowerShell, `@file` triggers PowerShell's splat operator and fails. Use one of these instead:
+
+```powershell
+# Option A: pass the JSON literal as a single quoted arg.
+agon batch '[{"method":"GET","path":"/v1/x402/tokens/assets/bitcoin"}]'
+
+# Option B: write a file (no BOM) and reference it with a backtick-escaped @.
+[IO.File]::WriteAllText("$PWD\batch.json", '[{"method":"GET","path":"/v1/x402/tokens/assets/bitcoin"}]')
+agon batch `@batch.json
+```
+
+The CLI strips a UTF-8 BOM from `@file` reads, so files written via `Set-Content -Encoding utf8` (which adds a BOM on PS 5.x) also work as of `@agonx402/gateway-cli@0.4.1`+.
 
 ## When to use Agon vs external data APIs
 
@@ -184,7 +209,7 @@ Use this path for current price, "today", 24h volume, market-cap, and similar qu
 2. If the Solana mint is known, call `GET /v1/x402/tokens/assets/:assetId/variant-market?mint=<mint>` directly. For many known mints, use `GET /v1/x402/tokens/assets/variant-markets?mints=<comma-list>`.
 3. If only a human name, ticker, or ambiguous phrase is known, call `GET /v1/x402/tokens/assets/resolve?ref=<text>` first; use `search` only when resolve is ambiguous or fails. Cache the resolved `assetId`, primary mint, and preferred view for the rest of the task/thread.
 4. For current 24h volume, report the direct cached `volume24hUSD`. Only call `ohlcv` when the user asks for a custom window such as 25h, 7D, or candles.
-5. For several assets, use one `gateway-cli batch` invocation or one batch endpoint. Do not start a separate `npx -y` process per quote.
+5. For several assets, use a single positional invocation: `agon quote A B C D` (or `agon price A B C D`). The CLI fans out the requests in parallel and reuses the cached SIWX bearer. Do not start a separate `npx -y` process per quote, do not write a JSON file, and do not call `agon batch` unless mixing different route shapes (e.g. tokens + wallet).
 6. Fetch `/v1/catalog` only when the route shape/schema is unknown, a direct known route fails, or the user is asking about route availability.
 
 Common identifiers below are examples, not the boundary of the fast path:
@@ -237,22 +262,16 @@ Preferred routes:
 - Fetch historical prices with `GET /v1/x402/tokens/assets/:assetId/price-chart` for canonical candles or `/ohlcv` for a specific mint variant.
 - Batch Solana mint market snapshots with `POST /v1/x402/tokens/assets/market-snapshots` (up to 250 mints) or `GET /v1/x402/tokens/assets/variant-markets` (up to 50 mints).
 
-When a user asks for several assets, prefer the MCP tool `agon_token_batch_quote` when available; otherwise use `gateway-cli batch` so one CLI invocation handles all requests. Keep one `AGON_SIGNER_COMMAND` in the environment and request all needed direct/resolve/search/profile/chart routes together.
+When a user asks for several assets, prefer the MCP tool `agon_token_batch_quote` when available; otherwise use the positional `agon quote` / `agon price` command — one CLI invocation, one signer, parallel requests, no shell quoting on any platform.
 
-Example multi-asset flow on bash/zsh (after `setup --target all`):
+Example multi-asset flow (works identically on bash/zsh/PowerShell/cmd after `setup`):
 
-```bash
-export AGON_SIGNER_COMMAND='agon-wallet authorize --profile default'
-agon batch '[{"method":"GET","path":"/v1/x402/tokens/assets/tesla"},{"method":"GET","path":"/v1/x402/tokens/assets/gold"},{"method":"GET","path":"/v1/x402/tokens/assets/bitcoin"}]'
+```text
+agon quote tesla gold bitcoin solana
+agon price tesla gold bitcoin solana   # alias of quote
 ```
 
-Same flow on Windows / PowerShell (use `@file` to avoid argument-quoting issues):
-
-```powershell
-$env:AGON_SIGNER_COMMAND = 'agon-wallet authorize --profile default'
-'[{"method":"GET","path":"/v1/x402/tokens/assets/tesla"},{"method":"GET","path":"/v1/x402/tokens/assets/gold"},{"method":"GET","path":"/v1/x402/tokens/assets/bitcoin"}]' | Set-Content -Encoding utf8 batch.json
-agon batch @batch.json
-```
+For the rare case of mixing different route shapes in one call (e.g. tokens detail + wallet balances), see the "agon batch" section above.
 
 ## Data Source Labels
 

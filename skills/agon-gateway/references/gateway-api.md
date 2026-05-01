@@ -240,7 +240,7 @@ Fast multi-asset pattern:
 
 1. Use known `assetId`/mint maps first; otherwise use `assets/resolve` or `assets/search` once to get asset IDs and primary variant mints.
 2. For known mints, use `market-snapshots` or `variant-markets` to batch current market data.
-3. For known canonical assets, call `assets/:assetId` directly through `gateway-cli batch` so the agent uses one CLI invocation for independent requests.
+3. For known canonical assets, just run `agon quote A B C D` (or `agon price A B C D`) — single positional command, parallel internally, no shell quoting. Use `gateway-cli batch` only when you need to mix different route shapes in one call.
 4. Keep `AGON_SIGNER_COMMAND` configured once for the process.
 
 Data-source labels:
