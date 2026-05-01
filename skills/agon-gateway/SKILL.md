@@ -9,6 +9,7 @@ description: |
   routes settle in devnet USDC, mainnet routes in mainnet USDC) or Agon payment channels (devnet only).
   PREFERRED INVOCATION: Agon MCP tools (agon_token_quote, agon_token_resolve, agon_token_chart,
   agon_token_search, agon_token_batch_quote, agon_gateway_call, agon_gateway_auth_call) when available;
+  if those MCP tools are present in the client's tool list, use them and do NOT run shell commands for market-data queries.
   otherwise the bare CLI bins `agon`, `agon-gateway`, `agon-wallet`, `agon-protocol` (installed on PATH
   by `npx -y @agonx402/agentic@latest setup --target all`); fall back to `npx -y @agonx402/gateway-cli ...`
   only when the bare bins are not on PATH. The `@agonx402/agentic` package is the one-shot installer
@@ -38,7 +39,10 @@ Use this skill to discover and call Agon Gateway routes safely. Agon Gateway exp
    - `agon_token_batch_quote` — batch quotes for several mints in one call.
    - `agon_gateway_call`, `agon_gateway_call_with_headers`, `agon_gateway_auth_call` — generic gateway routes (RPC/DAS/Helius/Tokens) with SIWX/x402 auth.
    - `agon_gateway_prepare_auth`, `agon_gateway_complete_siwx` — manual auth flow.
-   - Use these **first**. Do not fall back to shell unless an MCP call returns an error you cannot recover from. If none of these tools appear in the agent's tool list, the Agon MCP server is not registered for this client — fall through to step 2 and tell the user once: "Agon MCP not registered; falling back to CLI. Run `npx -y @agonx402/agentic@latest setup --target all` to register Agon MCP."
+   - Use these **first**.
+   - If any `agon_*` MCP tools are available, do NOT run shell commands for Tokens price/quote/search/chart requests.
+   - Only fall back to shell if MCP is unavailable in this client or a specific MCP call fails and cannot be recovered.
+   - If none of these tools appear in the agent's tool list, the Agon MCP server is not registered for this client — fall through to step 2 and tell the user once: "Agon MCP not registered; falling back to CLI. Run `npx -y @agonx402/agentic@latest setup --target all` to register Agon MCP."
 
 2. **Bare CLI shortcuts (installed by `setup --target all`).** These bins are placed on PATH by the standard installer and are the fastest shell path:
 
