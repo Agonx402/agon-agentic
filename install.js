@@ -10,6 +10,9 @@ const PACKAGE_NAME = "@agonx402/agentic";
 const GATEWAY_MCP_PACKAGE = "@agonx402/gateway-mcp";
 const PROTOCOL_MCP_PACKAGE = "@agonx402/protocol-mcp";
 const AGENT_WALLET_PACKAGE = "@agonx402/agent-wallet";
+const GATEWAY_CLI_PACKAGE = "@agonx402/gateway-cli";
+const PROTOCOL_CLI_PACKAGE = "@agonx402/protocol-cli";
+const GLOBAL_CLI_PACKAGES = [GATEWAY_CLI_PACKAGE, AGENT_WALLET_PACKAGE, PROTOCOL_CLI_PACKAGE];
 const DEFAULT_GATEWAY_BASE_URL = "https://gateway.agonx402.com";
 const DEFAULT_WALLET_PROFILE = "default";
 const SKILLS = [
@@ -33,8 +36,8 @@ Agon Agentic Installer
 
 Usage:
   agonx402-agentic install-skills [--target agents|codex|claude|all] [--target-dir PATH] [--wallet-profile NAME] [--skip-wallet-setup] [--dry-run]
-  agonx402-agentic setup [--target codex|claude-desktop|cursor|windsurf|generic|all] [--dry-run]
-                         [--wallet-profile NAME]
+  agonx402-agentic setup [--target codex|claude-desktop|claude-code|cursor|windsurf|generic|all] [--dry-run]
+                         [--wallet-profile NAME] [--skip-global-cli] [--skip-presign]
   agonx402-agentic list
   agonx402-agentic doctor
   agonx402-agentic help
@@ -271,6 +274,93 @@ function setupWallet(flags) {
   if (result.status !== 0) throw new Error(`${AGENT_WALLET_PACKAGE} setup exited with status ${result.status}.`);
 }
 
+function installGlobalCli(flags) {
+  if (flags.skipGlobalCli) {
+    if (!flags.quiet) {
+      process.stdout.write("Skipping global CLI install (--skip-global-cli). Use `npx -y @agonx402/gateway-cli ...` for invocation.\n");
+    }
+    return { ok: false, skipped: true };
+  }
+  const packages = GLOBAL_CLI_PACKAGES.map((name) => `${name}@latest`);
+  const args = ["install", "--global", "--no-fund", "--no-audit", ...packages];
+  if (flags.dryRun) {
+    process.stdout.write(`[dry-run] npm ${args.join(" ")}\n`);
+    return { ok: true, dryRun: true };
+  }
+  if (!flags.quiet) {
+    process.stdout.write(`Installing CLI packages globally: ${GLOBAL_CLI_PACKAGES.join(", ")}\n`);
+  }
+  const result = childProcess.spawnSync("npm", args, {
+    encoding: "utf8",
+    shell: process.platform === "win32",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const stdout = result.stdout || "";
+  const stderr = result.stderr || "";
+  if (result.error || result.status !== 0) {
+    const combined = `${stdout}\n${stderr}`;
+    const isPermission = /EACCES|EPERM|permission denied|requires the writable/i.test(combined);
+    if (!flags.quiet) {
+      process.stderr.write(`\nGlobal CLI install did not complete${isPermission ? " (permission error)" : ""}.\n`);
+      if (combined.trim()) process.stderr.write(combined.trim() + "\n");
+      process.stderr.write("\nAgon is still usable -- skills, wallet, and MCP registration are in place.\n");
+      if (isPermission) {
+        if (process.platform === "win32") {
+          process.stderr.write("Try a non-admin npm prefix or run from an elevated terminal:\n");
+          process.stderr.write("  npm install -g " + GLOBAL_CLI_PACKAGES.join(" ") + "\n");
+        } else {
+          process.stderr.write("Re-run with elevated permissions or fix your npm prefix:\n");
+          process.stderr.write("  sudo npm install -g " + GLOBAL_CLI_PACKAGES.join(" ") + "\n");
+          process.stderr.write("Or use a Node version manager (nvm, fnm, volta) to avoid sudo.\n");
+        }
+      } else {
+        process.stderr.write("Re-run manually:\n");
+        process.stderr.write("  npm install -g " + GLOBAL_CLI_PACKAGES.join(" ") + "\n");
+      }
+      process.stderr.write("Falling back to npx invocation in the meantime: `npx -y @agonx402/gateway-cli ...`.\n\n");
+    }
+    return { ok: false, permission: isPermission };
+  }
+  if (!flags.quiet && stdout) process.stdout.write(stdout);
+  if (!flags.quiet) {
+    process.stdout.write(`Installed CLI packages globally. Bare commands now on PATH: agon, agon-gateway, agon-wallet, agon-protocol.\n`);
+  }
+  return { ok: true };
+}
+
+function bundledLlmTxtPaths() {
+  const root = packageRoot();
+  return [
+    path.join(root, "llm.txt"),
+    path.join(root, "llms.txt"),
+  ];
+}
+
+function copyLlmTxtToAgonHome(flags) {
+  const candidates = bundledLlmTxtPaths();
+  const source = candidates.find((file) => fs.existsSync(file));
+  if (!source) {
+    if (!flags.quiet) {
+      process.stdout.write("No bundled llm.txt found; skipping local copy.\n");
+    }
+    return;
+  }
+  const targetDir = agonHome();
+  const target = path.join(targetDir, "llm.txt");
+  const sourceContent = fs.readFileSync(source, "utf8");
+  if (flags.dryRun) {
+    process.stdout.write(`[dry-run] copy ${source} -> ${target}\n`);
+    return;
+  }
+  if (fs.existsSync(target) && fs.readFileSync(target, "utf8") === sourceContent) {
+    if (!flags.quiet) process.stdout.write(`Local llm.txt already up to date ${target}\n`);
+    return;
+  }
+  fs.mkdirSync(targetDir, { recursive: true });
+  fs.writeFileSync(target, sourceContent);
+  if (!flags.quiet) process.stdout.write(`Wrote local llm.txt ${target}\n`);
+}
+
 function mcpEnv(flags) {
   return {
     AGON_GATEWAY_BASE_URL: String(flags.gatewayBaseUrl || DEFAULT_GATEWAY_BASE_URL),
@@ -305,7 +395,8 @@ function mcpJsonConfig(env) {
 
 function readJsonFile(filePath) {
   try {
-    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+    const text = fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, "");
+    return text.trim() ? JSON.parse(text) : {};
   } catch (error) {
     if (error.code === "ENOENT") return {};
     throw new Error(`Unable to read JSON config ${filePath}: ${error.message}`);
@@ -429,6 +520,12 @@ function clientAdapters() {
           : path.join(home, ".config", "Claude"),
       write: writeJsonMcpConfig,
     },
+    "claude-code": {
+      label: "Claude Code",
+      path: path.join(home, ".claude.json"),
+      requiredDir: home,
+      write: writeJsonMcpConfig,
+    },
     cursor: {
       label: "Cursor",
       path: path.join(home, ".cursor", "mcp.json"),
@@ -459,7 +556,7 @@ function setupTargets(flags) {
   const adapters = clientAdapters();
   if (target === "all") return Object.keys(adapters);
   if (!adapters[target]) {
-    throw new Error("Invalid setup --target. Use codex, claude-desktop, cursor, windsurf, generic, or all.");
+    throw new Error("Invalid setup --target. Use codex, claude-desktop, claude-code, cursor, windsurf, generic, or all.");
   }
   return [target];
 }
@@ -471,12 +568,63 @@ function registerMcpClients(flags) {
   const all = String(flags.target || "all").toLowerCase() === "all";
   for (const target of targets) {
     const adapter = adapters[target];
-    if (all && adapter.requiredDir && !fs.existsSync(adapter.requiredDir)) {
-      process.stdout.write(`Skipping ${adapter.label}: ${adapter.requiredDir} not found.\n`);
-      continue;
+    try {
+      if (all && adapter.requiredDir && !fs.existsSync(adapter.requiredDir)) {
+        process.stdout.write(`Skipping ${adapter.label}: ${adapter.requiredDir} not found.\n`);
+        continue;
+      }
+      adapter.write(adapter.path, env, flags);
+    } catch (error) {
+      process.stdout.write(`Warning: failed to register ${adapter.label} (${error.message}). Continuing.\n`);
     }
-    adapter.write(adapter.path, env, flags);
   }
+}
+
+function runPresign(flags) {
+  if (flags.dryRun) {
+    process.stdout.write("[dry-run] would run agon presign\n");
+    return;
+  }
+  if (flags.skipPresign) {
+    process.stdout.write("Skipping SIWX presign (--skip-presign). First quote will sign on demand.\n");
+    return;
+  }
+  const candidates = process.platform === "win32"
+    ? ["agon.cmd", "agon.exe", "agon"]
+    : ["agon"];
+  let resolved;
+  for (const candidate of candidates) {
+    const result = childProcess.spawnSync(process.platform === "win32" ? "where" : "which", [candidate], {
+      encoding: "utf8",
+      shell: false,
+    });
+    if (result.status === 0 && result.stdout && result.stdout.trim()) {
+      resolved = candidate;
+      break;
+    }
+  }
+  let command;
+  let args;
+  if (resolved) {
+    command = resolved;
+    args = ["presign"];
+  } else {
+    command = "npx";
+    args = ["-y", GATEWAY_CLI_PACKAGE, "presign"];
+  }
+  const result = childProcess.spawnSync(command, args, {
+    encoding: "utf8",
+    shell: process.platform === "win32",
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: 30000,
+  });
+  if (result.error || result.status !== 0) {
+    const detail = ((result.stderr || "") + (result.stdout || "")).trim();
+    process.stdout.write(`Presign skipped: ${result.error?.message || `exit ${result.status}`}.${detail ? " " + detail.split("\n")[0] : ""}\n`);
+    return;
+  }
+  const out = (result.stdout || "").trim();
+  if (out) process.stdout.write(`${out}\n`);
 }
 
 function setup(flags) {
@@ -485,64 +633,50 @@ function setup(flags) {
   installSkills({ target: "all", dryRun, quiet: true, skipWalletSetup: true });
   if (!dryRun) process.stdout.write("Installed Agon skills into agents, codex, and claude skill directories.\n");
   setupWallet(flags);
+  installGlobalCli(flags);
+  copyLlmTxtToAgonHome(flags);
   registerMcpClients(flags);
+  runPresign(flags);
 }
 
 function printSetup() {
   process.stdout.write(`Next steps:
 
-Gateway CLI:
-  npx -y @agonx402/gateway-cli -p bitcoin
-  npx -y @agonx402/gateway-cli quote usdt --json
-  npx -y @agonx402/gateway-cli price bitcoin solana usdt
-  npx -y @agonx402/gateway-cli volume tesla gold --json
-  npx -y @agonx402/gateway-cli liquidity usdc usdt
-  npx -y @agonx402/gateway-cli search "bitcoin etf" --limit 5
-  npx -y @agonx402/gateway-cli risk usdt
-  npx -y @agonx402/gateway-cli chart solana --interval 1D
-  npx -y @agonx402/gateway-cli catalog
-  npx -y @agonx402/gateway-cli auth call GET /v1/x402/tokens/assets/search --query q=solana --query limit=1
-  npx -y @agonx402/gateway-cli auth call GET /v1/x402/tokens/assets/tesla/profile
-
-Low-latency quote loops:
-  Use npx for setup or one-off calls. For repeated market-data calls, install/use a fixed gateway-cli executable and set AGON_SIGNER_COMMAND to a fixed signer command instead of spawning npx per request.
-  Known assets should call direct Tokens routes such as /v1/x402/tokens/assets/solana or /v1/x402/tokens/assets/usd/variant-market?mint=Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB.
+Gateway CLI (bare bins on PATH after \`setup --target all\`):
+  agon -p bitcoin
+  agon quote usdt --json
+  agon price bitcoin solana usdt
+  agon volume tesla gold --json
+  agon liquidity usdc usdt
+  agon search "bitcoin etf" --limit 5
+  agon risk usdt
+  agon chart solana --interval 1D
+  agon-gateway catalog
+  agon-gateway auth call GET /v1/x402/tokens/assets/search --query q=solana --query limit=1
+  agon-gateway auth call GET /v1/x402/tokens/assets/tesla/profile
 
 Protocol CLI:
-  npx -y @agonx402/protocol-cli config
-  npx -y @agonx402/protocol-cli token show
+  agon-protocol config
+  agon-protocol token show
 
 Agent wallet:
-  npx -y @agonx402/agent-wallet show --profile default
+  agon-wallet show --profile default
 
-MCP server commands:
+If a bare bin is not on PATH (e.g. you ran \`setup\` with \`--skip-global-cli\`, or the global install hit a permission error), the \`npx -y @agonx402/<package> ...\` form works on any machine without prior setup.
+
+MCP server commands (auto-spawned by client; you should not need to run these manually):
   npx -y @agonx402/gateway-mcp
   npx -y @agonx402/protocol-mcp
 
-Example MCP config:
-{
-  "mcpServers": {
-    "agon-gateway": {
-      "command": "npx",
-      "args": ["-y", "@agonx402/gateway-mcp"],
-      "env": {
-        "AGON_GATEWAY_BASE_URL": "https://gateway.agonx402.com",
-        "AGON_SIGNER_COMMAND": "npx -y @agonx402/agent-wallet authorize",
-        "AGON_WALLET_PROFILE": "default"
-      }
-    },
-    "agon-protocol": {
-      "command": "npx",
-      "args": ["-y", "@agonx402/protocol-mcp"]
-    }
-  }
-}
-
 Notes:
-- \`install-skills\` installs the bundled skills and creates the default SIWX signer wallet. Use \`--skip-wallet-setup\` only when another signer is configured.
+- \`setup --target all\` is the one-shot installer: skills, default SIWX wallet, global CLI bins, MCP server registration in every supported client, and a local copy of llm.txt at \`~/.agon/llm.txt\`.
+- It registers Agon MCP servers in Codex (\`~/.codex/config.toml\`), Claude Desktop (\`claude_desktop_config.json\`), Claude Code (\`~/.claude.json\`), Cursor (\`~/.cursor/mcp.json\`), Windsurf, and a generic \`~/.agon/mcp.json\`. Existing MCP entries are preserved and a backup is written before any change.
+- Use \`--skip-global-cli\` to skip the \`npm install -g\` step (you can fall back to \`npx -y\`).
+- Use \`--skip-presign\` to skip the post-install SIWX warmup. Without it, the first cold token quote does the full 402 + sign + retry; with it, the SIWX bearer is cached at \`~/.agon/siwx-cache.json\` and reused for ~5 minutes per the gateway's expirationTime.
+- Use \`--skip-wallet-setup\` only when another signer wallet is already configured.
+- Restart your agent client after \`setup\` so it re-reads the MCP server list.
 - Payment-channel routes are devnet-only in v1.
 - Tokens SIWX routes do not use payment channels and cover market data for crypto, currencies, treasuries, ETFs, metals, and stocks.
-- Run \`npx -y @agonx402/agentic setup --target all\` for skills, default wallet, policy, and MCP registration.
 - The default \`agon-wallet\` signer is SIWX-only (Tokens API). For x402 exact-payment routes set \`AGON_SIGNER_COMMAND\` to a payment-capable hook.
 `);
 }

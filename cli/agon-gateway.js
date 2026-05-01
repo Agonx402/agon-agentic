@@ -4,6 +4,7 @@
 const childProcess = require("node:child_process");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const pkg = require("./package.json");
 
@@ -25,7 +26,9 @@ Agon Gateway CLI
 
 Usage:
   agon-gateway -p <asset|ticker|mint> [--json]
-  agon-gateway quote <asset...> [--mint MINT] [--asset-id ID] [--view auto|canonical|variant|stats] [--json]
+  agon-gateway presign [--json]
+  agon-gateway quote <asset...> [--mint MINT] [--asset-id ID] [--view auto|canonical|variant|stats] [--concurrency N] [--json]
+  agon-gateway batch-quote <asset|mint...> [--concurrency N] [--json]
   agon-gateway price <asset...> [--json]
   agon-gateway volume <asset...> [--json]
   agon-gateway liquidity <asset...> [--json]
@@ -69,7 +72,9 @@ Usage:
 
 Examples:
   agon -p bitcoin
+  agon presign
   agon quote bitcoin solana usdt
+  agon batch-quote bitcoin solana gold tesla
   agon price usdt
   agon volume tesla gold --json
   agon liquidity usdc usdt
@@ -393,9 +398,23 @@ async function requestGatewayRaw(flags, method, requestPath, options = {}) {
 }
 
 async function requestGateway(flags, method, requestPath, options = {}) {
+  const normalizedTokensPath = tokensPath(requestPath);
+  const isTokensRoute = normalizedTokensPath === requestPath;
+  const baseUrl = normalizeBaseUrl(flags);
   const cachedHeaders = {};
-  if (!flags.siwx && flags.__siwxHeader && tokensPath(requestPath) === requestPath) {
-    cachedHeaders["SIGN-IN-WITH-X"] = flags.__siwxHeader;
+  let cameFromCache = false;
+  if (!flags.siwx && isTokensRoute) {
+    if (!flags.__siwxByPath) flags.__siwxByPath = new Map();
+    let header = flags.__siwxByPath.get(requestPath);
+    if (!header && !flags.noSiwxCache) {
+      const cached = findCachedSiwx(baseUrl, requestPath);
+      if (cached) {
+        header = cached.header;
+        flags.__siwxByPath.set(requestPath, header);
+        cameFromCache = true;
+      }
+    }
+    if (header) cachedHeaders["SIGN-IN-WITH-X"] = header;
   }
   const request = buildGatewayRequest(flags, method, requestPath, {
     ...options,
@@ -407,6 +426,12 @@ async function requestGateway(flags, method, requestPath, options = {}) {
   const firstResponse = await sendBuiltRequest(request);
   if (firstResponse.status !== 402) {
     return firstResponse;
+  }
+
+  if (cameFromCache && isTokensRoute) {
+    evictSiwx(baseUrl, requestPath);
+    if (flags.__siwxByPath) flags.__siwxByPath.delete(requestPath);
+    delete request.headers["SIGN-IN-WITH-X"];
   }
 
   const signerCommand = authDriverCommand(flags);
@@ -424,8 +449,12 @@ async function requestGateway(flags, method, requestPath, options = {}) {
   });
   const driverHeaders = runAuthDriver(flags, authRequest, signerCommand);
   const siwxHeader = headerValue(driverHeaders, "SIGN-IN-WITH-X");
-  if (siwxHeader && tokensPath(requestPath) === requestPath) {
-    flags.__siwxHeader = siwxHeader;
+  if (siwxHeader && isTokensRoute) {
+    if (!flags.__siwxByPath) flags.__siwxByPath = new Map();
+    flags.__siwxByPath.set(requestPath, siwxHeader);
+    if (!flags.noSiwxCache) {
+      recordSiwx(baseUrl, siwxHeader);
+    }
   }
   Object.assign(request.headers, driverHeaders);
   return sendBuiltRequest(request);
@@ -667,12 +696,15 @@ async function prepareAuthRequest(flags, method, requestPath, options = {}) {
     includeAuthFlags: false,
   });
 
+  const isTokensRoute = request.path.startsWith("/v1/x402/tokens/");
   let catalogRoute;
-  try {
-    const catalog = await getCatalog(flags);
-    catalogRoute = findRouteForRequest(catalogRoutes(catalog), request.method, request.path);
-  } catch {
-    catalogRoute = undefined;
+  if (!isTokensRoute) {
+    try {
+      const catalog = await getCatalog(flags);
+      catalogRoute = findRouteForRequest(catalogRoutes(catalog), request.method, request.path);
+    } catch {
+      catalogRoute = undefined;
+    }
   }
 
   const fallbackRoute = inferRoute(request.path);
@@ -938,6 +970,123 @@ function tokensPath(requestPath) {
     return `/${trimmed}`;
   }
   return `/v1/x402/tokens/${trimmed}`;
+}
+
+const SIWX_CACHE_SAFETY_MARGIN_MS = 30_000;
+
+function siwxCachePath() {
+  return path.join(os.homedir(), ".agon", "siwx-cache.json");
+}
+
+function loadSiwxCache() {
+  try {
+    const raw = fs.readFileSync(siwxCachePath(), "utf8").replace(/^\uFEFF/, "");
+    if (!raw.trim()) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    return [];
+  }
+}
+
+function saveSiwxCache(entries) {
+  try {
+    const filePath = siwxCachePath();
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    const json = JSON.stringify(entries, null, 2);
+    fs.writeFileSync(filePath, json);
+    try { fs.chmodSync(filePath, 0o600); } catch { /* best-effort on Windows */ }
+  } catch {
+    /* cache write failures must never break a request */
+  }
+}
+
+function siwxPathnameFromUri(uri) {
+  if (!uri) return undefined;
+  try {
+    return new URL(uri).pathname;
+  } catch {
+    return undefined;
+  }
+}
+
+// SIWX challenges from the gateway carry the *template* path (e.g.
+// `/v1/x402/tokens/assets/:assetId`) in their `uri` field. A single
+// signature for the template is accepted by the gateway for any
+// concrete instantiation (e.g. /assets/bitcoin, /assets/solana, ...)
+// until the signed `expirationTime`. Cache lookups must therefore
+// match a concrete request path against a templated entry.
+function pathMatchesTemplate(template, concrete) {
+  if (!template || !concrete) return false;
+  if (template === concrete) return true;
+  const t = template.split("/");
+  const c = concrete.split("/");
+  if (t.length !== c.length) return false;
+  for (let i = 0; i < t.length; i++) {
+    if (t[i].startsWith(":")) continue;
+    if (t[i] !== c[i]) return false;
+  }
+  return true;
+}
+
+function findCachedSiwx(baseUrl, requestPath) {
+  const now = Date.now();
+  const entries = loadSiwxCache();
+  for (const entry of entries) {
+    if (!entry || entry.baseUrl !== baseUrl) continue;
+    if (!entry.header) continue;
+    if (requestPath && entry.pathname && !pathMatchesTemplate(entry.pathname, requestPath)) continue;
+    if (entry.expirationTime) {
+      const expiresAt = Date.parse(entry.expirationTime);
+      if (Number.isFinite(expiresAt) && expiresAt - now <= SIWX_CACHE_SAFETY_MARGIN_MS) continue;
+    }
+    return entry;
+  }
+  return undefined;
+}
+
+function recordSiwx(baseUrl, header) {
+  if (!baseUrl || !header) return;
+  const info = siwxPayloadInfo(header);
+  const pathname = info.pathname;
+  const entries = loadSiwxCache().filter((entry) => {
+    if (!entry || entry.baseUrl !== baseUrl) return true;
+    // Drop prior entries with the same SIWX template (we have a fresher one).
+    if (entry.pathname && pathname && entry.pathname !== pathname) return true;
+    return false;
+  });
+  entries.unshift({
+    baseUrl,
+    pathname: pathname || null,
+    address: info.address || null,
+    header,
+    expirationTime: info.expirationTime || null,
+    cachedAt: new Date().toISOString(),
+  });
+  saveSiwxCache(entries.slice(0, 64));
+}
+
+function evictSiwx(baseUrl, requestPath) {
+  if (!baseUrl) return;
+  const entries = loadSiwxCache().filter((entry) => {
+    if (!entry || entry.baseUrl !== baseUrl) return true;
+    // Evict every entry whose template covers the request path that
+    // just failed; keep entries belonging to other templates.
+    if (requestPath && entry.pathname && !pathMatchesTemplate(entry.pathname, requestPath)) return true;
+    return false;
+  });
+  saveSiwxCache(entries);
+}
+
+function siwxPayloadInfo(header) {
+  const payload = decodeBase64Json(header);
+  if (!payload || typeof payload !== "object") return {};
+  return {
+    address: payload.address ? String(payload.address) : undefined,
+    expirationTime: payload.expirationTime ? String(payload.expirationTime) : undefined,
+    pathname: siwxPathnameFromUri(payload.uri),
+  };
 }
 
 function normalizeBatchRequests(input) {
@@ -1244,11 +1393,107 @@ async function fetchQuote(flags, input) {
 
 async function fetchQuotes(flags, inputs) {
   const quoteInputs = inputs.length > 0 ? inputs : [undefined];
-  const results = [];
-  for (const input of quoteInputs) {
-    results.push(await fetchQuote(flags, input));
+  const concurrency = Math.max(1, Math.min(
+    Number(flags.concurrency) || 8,
+    quoteInputs.length,
+  ));
+  if (concurrency <= 1 || quoteInputs.length <= 1) {
+    const results = [];
+    for (const input of quoteInputs) {
+      results.push(await fetchQuote(flags, input));
+    }
+    return results;
   }
+  if (!flags.siwx && !flags.__siwxHeader) {
+    const baseUrl = normalizeBaseUrl(flags);
+    const cached = !flags.noSiwxCache ? findCachedSiwx(baseUrl) : undefined;
+    if (!cached) {
+      try {
+        await runPresign({ ...flags, __presignSilent: true });
+      } catch {
+        /* fall through to per-input signing */
+      }
+    }
+  }
+  const results = new Array(quoteInputs.length);
+  let cursor = 0;
+  async function worker() {
+    while (true) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= quoteInputs.length) return;
+      try {
+        results[index] = await fetchQuote(flags, quoteInputs[index]);
+      } catch (error) {
+        results[index] = {
+          ok: false,
+          input: quoteInputs[index],
+          error: error.message,
+        };
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
   return results;
+}
+
+async function runPresign(flags) {
+  const authFlags = quoteAuthFlags(flags);
+  const baseUrl = normalizeBaseUrl(authFlags);
+  if (!flags.__presignSilent) {
+    process.stdout.write(`Presigning SIWX bearers for ${baseUrl}...\n`);
+  }
+  const startedAt = Date.now();
+  // One sign for the /assets/:assetId template covers /assets/<id>,
+  // /assets/resolve, and /assets/search on the gateway (they all share
+  // the same SIWX template). Signed headers stay valid until
+  // expirationTime (~5 min), so a single warmup unlocks instant agent
+  // quotes for the rest of the session.
+  const presignTargets = [
+    { method: "GET", path: "/v1/x402/tokens/assets/bitcoin" },
+  ];
+  let signed = 0;
+  let lastError;
+  for (const target of presignTargets) {
+    try {
+      const response = await requestGateway(authFlags, target.method, target.path, {
+        query: target.query,
+        requireSignerOn402: true,
+      });
+      if (response.ok) signed += 1;
+      else lastError = `HTTP ${response.status} on ${target.path}`;
+    } catch (error) {
+      lastError = `${target.path}: ${error.message}`;
+    }
+  }
+  if (signed === 0) {
+    throw new Error(`Presign failed: ${lastError || "no targets succeeded"}`);
+  }
+  const elapsedMs = Date.now() - startedAt;
+  const cached = findCachedSiwx(baseUrl);
+  if (flags.__presignSilent) return { ok: true, baseUrl, signed, elapsedMs };
+  if (flags.json) {
+    printJson({
+      ok: true,
+      baseUrl,
+      signed,
+      address: cached?.address || null,
+      cachePath: siwxCachePath(),
+      elapsedMs,
+    });
+  } else {
+    const address = cached?.address || "(unknown)";
+    process.stdout.write(`Pre-signed ${signed} SIWX bearers for ${address}. Cache: ${siwxCachePath()}. Elapsed: ${elapsedMs}ms.\n`);
+  }
+  return { ok: true, baseUrl, signed, elapsedMs };
+}
+
+async function fetchBatchQuote(flags, inputs) {
+  const concurrency = Math.max(1, Math.min(
+    Number(flags.concurrency) || inputs.length,
+    16,
+  ));
+  return fetchQuotes({ ...flags, concurrency }, inputs);
 }
 
 function formatUsd(value, compact = false) {
@@ -1962,6 +2207,18 @@ async function main() {
       const requestPath = args.shift();
       if (!requestPath) throw new Error("tokens requires a tokens path.");
       printJson(await requestGateway(flags, method, tokensPath(requestPath)));
+      return;
+    }
+
+    case "presign": {
+      await runPresign(flags);
+      return;
+    }
+
+    case "batch-quote": {
+      const inputs = args;
+      if (inputs.length === 0) throw new Error("batch-quote requires one or more assets or mints.");
+      printQuoteSummaries(await fetchBatchQuote(flags, inputs), flags);
       return;
     }
 

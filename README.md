@@ -4,22 +4,41 @@ Agent-facing tools for discovering, authenticating, and calling Agon Gateway rou
 
 ## One-Step Setup
 
-Install skills, create a default convenience signer wallet (`@agonx402/agent-wallet`), and register MCP servers for supported agent clients:
+`setup --target all` is the one command that installs everything Agon agents need:
+
+- Bundled skills into `~/.agents/skills`, `~/.codex/skills`, `~/.claude/skills`.
+- Default SIWX signer wallet at `~/.agon/wallets/default.json`.
+- Global CLI bins on PATH: `agon`, `agon-gateway`, `agon-wallet`, `agon-protocol` (via `npm install -g @agonx402/gateway-cli @agonx402/agent-wallet @agonx402/protocol-cli`).
+- Local agent reference at `~/.agon/llm.txt`.
+- Agon MCP server registration for Codex, Claude Desktop, Claude Code, Cursor, Windsurf, and a generic config (existing entries preserved, backups written).
 
 ```bash
-npx -y @agonx402/agentic setup --target all
+npx -y @agonx402/agentic@latest setup --target all
 ```
+
+After it finishes, restart your agent client and the agent can call Agon directly via:
+
+- The Agon MCP tools (`agon_token_quote`, `agon_token_resolve`, `agon_token_chart`, `agon_token_search`, `agon_token_batch_quote`, `agon_gateway_call`, `agon_gateway_auth_call`, ...).
+- The bare CLIs: `agon -p bitcoin`, `agon quote bitcoin solana usdt`, `agon-gateway auth call GET ...`, etc.
+
+Opt-out flags:
+
+- `--skip-global-cli` — do not run `npm install -g`. Bare CLI bins will not be on PATH; use `npx -y @agonx402/gateway-cli ...` instead.
+- `--skip-wallet-setup` — only valid for `install-skills` when another signer wallet is already configured.
 
 Supported setup targets:
 
 ```bash
-npx -y @agonx402/agentic setup --target codex
-npx -y @agonx402/agentic setup --target claude-desktop
-npx -y @agonx402/agentic setup --target cursor
+npx -y @agonx402/agentic setup --target codex            # ~/.codex/config.toml
+npx -y @agonx402/agentic setup --target claude-desktop   # standalone Claude Desktop GUI app config
+npx -y @agonx402/agentic setup --target claude-code      # ~/.claude.json (Claude Code CLI agent)
+npx -y @agonx402/agentic setup --target cursor           # ~/.cursor/mcp.json
 npx -y @agonx402/agentic setup --target windsurf
-npx -y @agonx402/agentic setup --target generic
+npx -y @agonx402/agentic setup --target generic          # ~/.agon/mcp.json
 npx -y @agonx402/agentic setup --target all --dry-run
 ```
+
+`--target all` writes to every adapter listed above. **Claude Desktop** (the standalone macOS/Windows GUI app) and **Claude Code** (the terminal CLI agent) read MCP servers from different files; `--target all` registers in both. After setup, restart your agent client so it re-reads the MCP server list.
 
 Setup creates `~/.agon/wallets/default.json`. `@agonx402/agent-wallet` **only signs Tokens API SIWX challenges** (`sign-in-with-x`). For Gateway routes that require **x402 exact payment** or other auth, set `AGON_SIGNER_COMMAND` to a signer that returns `PAYMENT-SIGNATURE` / `X-PAYMENT`.
 
@@ -57,32 +76,32 @@ Use `--skip-wallet-setup` only when another signer wallet is already configured.
 
 `install-skills` installs skills and creates `~/.agon/wallets/default.json`. `setup` performs skills, wallet, and MCP registration.
 
-Run the CLIs directly with `npx` for setup, smoke tests, and one-off calls:
+After `setup --target all`, the CLI bins are on PATH. Use them directly:
 
 ```bash
-npx -y @agonx402/gateway-cli -p bitcoin
-npx -y @agonx402/gateway-cli quote usdt --json
-npx -y @agonx402/gateway-cli price bitcoin solana usdt
-npx -y @agonx402/gateway-cli volume tesla gold --json
-npx -y @agonx402/gateway-cli liquidity usdc usdt
-npx -y @agonx402/gateway-cli search "bitcoin etf" --limit 5
-npx -y @agonx402/gateway-cli profile tesla
-npx -y @agonx402/gateway-cli variants gold
-npx -y @agonx402/gateway-cli risk usdt
-npx -y @agonx402/gateway-cli chart solana --interval 1D
-npx -y @agonx402/gateway-cli catalog
-npx -y @agonx402/gateway-cli agent-prompt
-npx -y @agonx402/gateway-cli auth prepare GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1 --json
-npx -y @agonx402/gateway-cli auth call GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1
-npx -y @agonx402/gateway-cli batch '[{"method":"GET","path":"/v1/x402/tokens/assets/solana/price-chart","query":{"interval":"1D"}},{"method":"GET","path":"/v1/x402/tokens/assets/bitcoin/price-chart","query":{"interval":"1D"}}]'
-npx -y @agonx402/gateway-cli auth call GET /v1/x402/tokens/assets/tesla/profile
-npx -y @agonx402/gateway-cli auth call GET /v1/x402/tokens/assets/gold/price-chart --query interval=1D
-npx -y @agonx402/agent-wallet authorize --stdin
-npx -y @agonx402/protocol-cli config
-npx -y @agonx402/protocol-cli token show
+agon -p bitcoin
+agon quote usdt --json
+agon price bitcoin solana usdt
+agon volume tesla gold --json
+agon liquidity usdc usdt
+agon search "bitcoin etf" --limit 5
+agon profile tesla
+agon variants gold
+agon risk usdt
+agon chart solana --interval 1D
+agon-gateway catalog
+agon-gateway agent-prompt
+agon-gateway auth prepare GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1 --json
+agon-gateway auth call GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1
+agon-gateway batch '[{"method":"GET","path":"/v1/x402/tokens/assets/solana/price-chart","query":{"interval":"1D"}},{"method":"GET","path":"/v1/x402/tokens/assets/bitcoin/price-chart","query":{"interval":"1D"}}]'
+agon-gateway auth call GET /v1/x402/tokens/assets/tesla/profile
+agon-gateway auth call GET /v1/x402/tokens/assets/gold/price-chart --query interval=1D
+agon-wallet authorize --stdin
+agon-protocol config
+agon-protocol token show
 ```
 
-For low-latency repeated calls, do not put `npx -y` in the hot path. Install the CLI globally or in the project, or use local repository scripts after their package dependencies are installed, and set `AGON_SIGNER_COMMAND` to a fixed signer executable such as `agon-wallet authorize --profile default`. This avoids repeated package resolution and Node process startup around every SIWX signing call.
+If a bare bin is not on PATH (you ran `setup --skip-global-cli`, the global install hit a permission error, or you have not run `setup` yet), the same calls work via `npx -y @agonx402/gateway-cli ...`, `npx -y @agonx402/agent-wallet ...`, and `npx -y @agonx402/protocol-cli ...`. The MCP server entries also use `npx -y`, so you do not need a global install for MCP tools to work.
 
 Agon Gateway should be the first source for API calls covered by the live catalog at `https://gateway.agonx402.com/v1/catalog`. Tokens API supports market data for crypto, currencies, treasuries, ETFs, metals, stocks, and their Solana token variants. Agents should use high-level Gateway CLI commands for common Tokens pulls (`quote`, `price`, `volume`, `liquidity`, `mcap`, `search`, `resolve`, `curated`, `profile`, `variants`, `markets`, `tickers`, `risk`, `chart`, `ohlcv`, `snapshots`) before raw route strings, and label whether values came from `canonicalMarket`, `stats`, `primaryVariant.market`, `profile.data`, tickers, or candles.
 

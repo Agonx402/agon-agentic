@@ -3,6 +3,7 @@
 
 const fs = require("node:fs");
 const crypto = require("node:crypto");
+const os = require("node:os");
 const path = require("node:path");
 const childProcess = require("node:child_process");
 const pkg = require("./package.json");
@@ -188,7 +189,7 @@ const tools = [
   },
   {
     name: "agon_gateway_auth_call",
-    description: "Call any Agon Gateway route, use a configured signer hook for SIWX/x402 challenges, and retry the exact same request. Devnet RPC/DAS/Wallet routes pay in devnet USDC; mainnet RPC/DAS/Wallet routes pay in mainnet USDC; Tokens API SIWX routes (market data for crypto, stocks, ETFs, treasuries, metals, currencies) are free on either cluster. The signer must hold the USDC mint for the cluster of the route.",
+    description: "Generic escape hatch: call any Agon Gateway route, run the configured signer hook on a 402, and retry. For Tokens market-data questions, prefer the higher-level agon_token_quote / agon_token_resolve / agon_token_chart / agon_token_search / agon_token_batch_quote tools -- they pre-format the route, parse the response, and avoid shell quoting. Use this tool only for routes those higher-level tools do not cover (custom Tokens routes, Solana RPC, DAS, Helius Wallet, payment-channel routes). Devnet RPC/DAS/Wallet routes pay in devnet USDC; mainnet RPC/DAS/Wallet routes pay in mainnet USDC; Tokens API SIWX routes are free on either cluster. The signer must hold the USDC mint for the cluster of the route.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -214,7 +215,7 @@ const tools = [
   },
   {
     name: "agon_token_quote",
-    description: "Get current price, market cap, 24h volume, supply, and canonical market view for any Agon-tracked asset: crypto (BTC, SOL, ETH, USDC, USDT, ...), tokenized stock (TSLA, AAPL, MSFT, NVDA, ...), ETF, treasury, metal (gold, silver), or fiat currency. Free over SIWX -- no payment required. Pass either an Agon canonical assetId (e.g. 'bitcoin', 'solana', 'tesla', 'gold') or a Solana mint to look up a specific tokenized variant.",
+    description: "USE THIS FIRST for any current price / quote / market-cap / 24h volume / supply / liquidity question about a single asset -- crypto (BTC, SOL, ETH, USDC, USDT, ...), tokenized stock (TSLA, AAPL, MSFT, NVDA, ...), ETF, treasury, metal (gold, silver), or fiat currency. Free over SIWX (no payment). Returns the canonical market view plus optional variant view. Do NOT fall back to web search, shell commands, or third-party finance APIs for this -- prefer this tool. Pass either an Agon canonical assetId (e.g. 'bitcoin', 'solana', 'tesla', 'gold', 'usd') or include a Solana mint to look up a specific tokenized variant. If only a free-text ticker/name is known, call agon_token_resolve first to get the assetId.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -230,7 +231,7 @@ const tools = [
   },
   {
     name: "agon_token_resolve",
-    description: "Resolve a free-text reference (human name, ticker, or ambiguous phrase like 'tesla', 'gold', 'btc', 'BTC ETF') to a canonical Agon assetId, primary mint, and preferred market view. Free over SIWX. Call this first when the user gives a name/ticker rather than a known assetId.",
+    description: "Resolve a free-text reference (human name, ticker, or ambiguous phrase like 'tesla', 'gold', 'btc', 'BTC ETF') to a canonical Agon assetId, primary mint, and preferred market view. Free over SIWX. Call this BEFORE agon_token_quote / agon_token_chart whenever the user gives a name/ticker instead of a canonical assetId. Cache the result for the rest of the task.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -245,7 +246,7 @@ const tools = [
   },
   {
     name: "agon_token_chart",
-    description: "Get OHLCV/price chart candles for any Agon-tracked asset (crypto, tokenized stock, ETF, treasury, metal, currency) over a given interval. Free over SIWX. Use for historical prices, custom time windows (24h, 7D, 30D, ...), or candle aggregation.",
+    description: "USE THIS FIRST for any historical price / OHLCV / candle / time-window question about an Agon-tracked asset (crypto, tokenized stock, ETF, treasury, metal, currency). Free over SIWX. Use for historical prices, custom time windows (24h, 7D, 30D, ...), and candle aggregation. Do NOT fall back to web search, shell commands, or third-party finance APIs for this.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -263,7 +264,7 @@ const tools = [
   },
   {
     name: "agon_token_search",
-    description: "Search Agon Tokens for assets matching a free-text query (e.g. 'bitcoin etf', 'tokenized treasury', 'gold mining'). Returns ranked candidates with assetIds, symbols, and short descriptions. Free over SIWX. Prefer agon_token_resolve when the query is a single name/ticker; use search when the query is broader or ambiguous.",
+    description: "USE THIS FIRST for any 'find an asset / what tokens exist for X / list assets matching Y' question. Free over SIWX. Returns ranked candidates with assetIds, symbols, and short descriptions for queries like 'bitcoin etf', 'tokenized treasury', 'gold mining', 'AI tokens'. Prefer agon_token_resolve when the query is a single name/ticker; use search when the query is broader or ambiguous. Do NOT use web search for asset discovery on Agon-tracked classes (crypto, tokenized stocks, ETFs, treasuries, metals, currencies).",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -279,7 +280,7 @@ const tools = [
   },
   {
     name: "agon_token_batch_quote",
-    description: "Get current quotes for multiple Solana mints in a single call. Up to 50 mints uses GET /v1/x402/tokens/assets/variant-markets; >50 uses POST /v1/x402/tokens/assets/market-snapshots (max 250). Free over SIWX. Use when you have several known mints and want one round trip.",
+    description: "USE THIS FIRST for any multi-asset quote / 'price of X, Y, Z' / batch market-data question when the inputs are Solana mints. Free over SIWX. Up to 50 mints issues a single GET /v1/x402/tokens/assets/variant-markets; >50 issues POST /v1/x402/tokens/assets/market-snapshots (max 250). One round trip, no shell quoting. Prefer this over agon_token_quote in a loop, and over `npx -y @agonx402/gateway-cli batch` shell commands. If inputs are canonical names/tickers (not mints), resolve each via agon_token_resolve first to get mints, then batch-quote.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -592,6 +593,126 @@ function decodeBase64Json(value) {
   }
 }
 
+const SIWX_CACHE_SAFETY_MARGIN_MS = 30_000;
+const siwxMemCache = new Map();
+
+function siwxCachePath() {
+  return path.join(os.homedir(), ".agon", "siwx-cache.json");
+}
+
+function loadSiwxDiskCache() {
+  try {
+    const raw = fs.readFileSync(siwxCachePath(), "utf8").replace(/^\uFEFF/, "");
+    if (!raw.trim()) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveSiwxDiskCache(entries) {
+  try {
+    const filePath = siwxCachePath();
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(entries, null, 2));
+    try { fs.chmodSync(filePath, 0o600); } catch { /* best-effort on Windows */ }
+  } catch {
+    /* never fail a request because of a cache write */
+  }
+}
+
+function siwxValid(entry) {
+  if (!entry || !entry.header) return false;
+  if (entry.expirationTime) {
+    const expiresAt = Date.parse(entry.expirationTime);
+    if (Number.isFinite(expiresAt) && expiresAt - Date.now() <= SIWX_CACHE_SAFETY_MARGIN_MS) return false;
+  }
+  return true;
+}
+
+function siwxKey(baseUrl, pathname) {
+  return `${baseUrl}|${pathname || ""}`;
+}
+
+function siwxPathnameFromUri(uri) {
+  if (!uri) return undefined;
+  try { return new URL(uri).pathname; } catch { return undefined; }
+}
+
+// SIWX challenges carry a template path (e.g. /v1/x402/tokens/assets/:assetId).
+// One signed header is reusable for every concrete instantiation of that
+// template until expirationTime, so cache lookups must template-match.
+function pathMatchesTemplate(template, concrete) {
+  if (!template || !concrete) return false;
+  if (template === concrete) return true;
+  const t = template.split("/");
+  const c = concrete.split("/");
+  if (t.length !== c.length) return false;
+  for (let i = 0; i < t.length; i++) {
+    if (t[i].startsWith(":")) continue;
+    if (t[i] !== c[i]) return false;
+  }
+  return true;
+}
+
+function findSiwxFor(baseUrl, requestPath) {
+  for (const entry of siwxMemCache.values()) {
+    if (!entry || entry.baseUrl !== baseUrl) continue;
+    if (requestPath && entry.pathname && !pathMatchesTemplate(entry.pathname, requestPath)) continue;
+    if (siwxValid(entry)) return entry;
+  }
+  const disk = loadSiwxDiskCache().find((entry) => (
+    entry
+    && entry.baseUrl === baseUrl
+    && (!requestPath || !entry.pathname || pathMatchesTemplate(entry.pathname, requestPath))
+  ));
+  if (siwxValid(disk)) {
+    siwxMemCache.set(siwxKey(baseUrl, disk.pathname), disk);
+    return disk;
+  }
+  return undefined;
+}
+
+function recordSiwxFor(baseUrl, header) {
+  if (!baseUrl || !header) return;
+  const payload = decodeBase64Json(header) || {};
+  const pathname = siwxPathnameFromUri(payload.uri) || null;
+  const entry = {
+    baseUrl,
+    pathname,
+    address: payload.address ? String(payload.address) : null,
+    header,
+    expirationTime: payload.expirationTime ? String(payload.expirationTime) : null,
+    cachedAt: new Date().toISOString(),
+  };
+  siwxMemCache.set(siwxKey(baseUrl, pathname), entry);
+  const disk = loadSiwxDiskCache().filter((e) => {
+    if (!e || e.baseUrl !== baseUrl) return true;
+    // Drop prior entries for the same template; keep entries from other templates.
+    if (e.pathname && pathname && e.pathname !== pathname) return true;
+    return false;
+  });
+  disk.unshift(entry);
+  saveSiwxDiskCache(disk.slice(0, 64));
+}
+
+function evictSiwxFor(baseUrl, requestPath) {
+  if (!baseUrl) return;
+  for (const [key, entry] of siwxMemCache.entries()) {
+    if (!entry || entry.baseUrl !== baseUrl) continue;
+    if (!requestPath || !entry.pathname || pathMatchesTemplate(entry.pathname, requestPath)) {
+      siwxMemCache.delete(key);
+    }
+  }
+  const disk = loadSiwxDiskCache().filter((e) => {
+    if (!e || e.baseUrl !== baseUrl) return true;
+    if (requestPath && e.pathname && !pathMatchesTemplate(e.pathname, requestPath)) return true;
+    return false;
+  });
+  saveSiwxDiskCache(disk);
+}
+
 function formatSIWSMessage(info, address) {
   const lines = [
     `${info.domain} wants you to sign in with your Solana account:`,
@@ -694,12 +815,15 @@ async function prepareAuth(args, existingChallengeResponse) {
   appendQuery(url, args.query);
   const bodyText = requestBodyText(method, args.body);
 
+  const isTokensRoute = url.pathname.startsWith("/v1/x402/tokens/");
   let catalogRoute;
-  try {
-    const catalog = await getCatalog({ baseUrl });
-    catalogRoute = findRouteForRequest(catalogRoutes(catalog), method, url.pathname);
-  } catch {
-    catalogRoute = undefined;
+  if (!isTokensRoute) {
+    try {
+      const catalog = await getCatalog({ baseUrl });
+      catalogRoute = findRouteForRequest(catalogRoutes(catalog), method, url.pathname);
+    } catch {
+      catalogRoute = undefined;
+    }
   }
 
   const fallbackRoute = inferRoute(url.pathname);
@@ -897,20 +1021,44 @@ function runSignerCommand(commandValue, authRequest) {
 }
 
 async function authCall(args) {
-  const firstResponse = await fetchGateway(args, args.method, args.path);
+  const baseUrl = normalizeBaseUrl(args.baseUrl);
+  const requestPath = String(args.path || "");
+  const isTokensRoute = requestPath.startsWith("/v1/x402/tokens/");
+  const cachedHeaders = { ...(args.headers || {}) };
+  let usedCachedHeader = false;
+  if (isTokensRoute && !cachedHeaders["SIGN-IN-WITH-X"] && !args.siwx) {
+    const cached = findSiwxFor(baseUrl, requestPath);
+    if (cached) {
+      cachedHeaders["SIGN-IN-WITH-X"] = cached.header;
+      usedCachedHeader = true;
+    }
+  }
+
+  const firstArgs = { ...args, headers: cachedHeaders };
+  const firstResponse = await fetchGateway(firstArgs, args.method, args.path);
   if (firstResponse.status !== 402) {
     return firstResponse;
   }
+
+  if (usedCachedHeader && isTokensRoute) {
+    evictSiwxFor(baseUrl, requestPath);
+    delete cachedHeaders["SIGN-IN-WITH-X"];
+  }
+
   const signerCommand = args.signerCommand || process.env.AGON_SIGNER_COMMAND;
   if (!signerCommand) {
     throw new Error("Gateway returned 402 Payment Required; agon_gateway_auth_call requires signerCommand or AGON_SIGNER_COMMAND.");
   }
   const authRequest = await prepareAuth(args, firstResponse);
   const signerHeaders = runSignerCommand(signerCommand, authRequest);
+  if (isTokensRoute) {
+    const issuedSiwx = headerValue(signerHeaders, "SIGN-IN-WITH-X");
+    if (issuedSiwx) recordSiwxFor(baseUrl, issuedSiwx);
+  }
   return fetchGateway({
     ...args,
     headers: {
-      ...(args.headers || {}),
+      ...cachedHeaders,
       ...signerHeaders,
     },
   }, args.method, args.path);

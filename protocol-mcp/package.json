@@ -1,6 +1,6 @@
 {
   "name": "@agonx402/protocol-mcp",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Read-only and prepare-only MCP server for Agon Protocol.",
   "license": "MIT",
   "mcpName": "io.github.Agonx402/agon-protocol",

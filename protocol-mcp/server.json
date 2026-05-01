@@ -6,12 +6,12 @@
     "url": "https://github.com/Agonx402/agon-gateway-agentic",
     "source": "github"
   },
-  "version": "0.3.1",
+  "version": "0.3.2",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@agonx402/protocol-mcp",
-      "version": "0.3.1",
+      "version": "0.3.2",
       "transport": {
         "type": "stdio"
       },
