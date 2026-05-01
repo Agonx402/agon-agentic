@@ -179,13 +179,20 @@ function singleFlag(flags, name) {
   return value;
 }
 
+// Windows tools (PowerShell `Set-Content -Encoding utf8`, Notepad, etc.)
+// write UTF-8 *with* a BOM by default. Strip it before JSON.parse so
+// `@file` arguments work portably.
+function stripBom(text) {
+  return text && text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+}
+
 function parseJsonInput(value, fallback) {
   if (value === undefined) {
     return fallback;
   }
 
   const text = String(value).startsWith("@")
-    ? fs.readFileSync(String(value).slice(1), "utf8")
+    ? stripBom(fs.readFileSync(String(value).slice(1), "utf8"))
     : String(value);
 
   try {
@@ -201,10 +208,10 @@ function readJsonDocument(value, label) {
   }
 
   const text = value === "-"
-    ? fs.readFileSync(0, "utf8")
+    ? stripBom(fs.readFileSync(0, "utf8"))
     : String(value).trimStart().startsWith("{")
       ? String(value)
-      : fs.readFileSync(String(value).replace(/^@/, ""), "utf8");
+      : stripBom(fs.readFileSync(String(value).replace(/^@/, ""), "utf8"));
 
   try {
     return JSON.parse(text);
