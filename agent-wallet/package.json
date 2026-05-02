@@ -1,6 +1,6 @@
 {
   "name": "@agonx402/agent-wallet",
-  "version": "0.3.0",
+  "version": "0.4.2",
   "description": "Generic local agent wallet and signer hook for Agon Gateway SIWX and x402 flows.",
   "license": "MIT",
   "homepage": "https://github.com/Agonx402/agon-gateway-agentic#readme",

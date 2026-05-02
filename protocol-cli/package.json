@@ -1,6 +1,6 @@
 {
   "name": "@agonx402/protocol-cli",
-  "version": "0.3.0",
+  "version": "0.4.2",
   "description": "Read-only and prepare-only CLI for Agon Protocol agents.",
   "license": "MIT",
   "homepage": "https://github.com/Agonx402/agon-gateway-agentic#readme",

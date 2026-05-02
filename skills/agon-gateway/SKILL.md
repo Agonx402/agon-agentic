@@ -112,7 +112,7 @@ agon batch '[{"method":"GET","path":"/v1/x402/tokens/assets/bitcoin"}]'
 agon batch `@batch.json
 ```
 
-The CLI strips a UTF-8 BOM from `@file` reads, so files written via `Set-Content -Encoding utf8` (which adds a BOM on PS 5.x) also work as of `@agonx402/gateway-cli@0.4.1`+.
+The CLI strips a UTF-8 BOM from `@file` reads, so files written via `Set-Content -Encoding utf8` (which adds a BOM on PS 5.x) also work as of `@agonx402/gateway-cli@0.4.2`+.
 
 ## When to use Agon vs external data APIs
 
