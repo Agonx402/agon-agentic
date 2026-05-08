@@ -6,41 +6,41 @@ const os = require("node:os");
 const path = require("node:path");
 const childProcess = require("node:child_process");
 
-const PACKAGE_NAME = "@agonx402/agentic";
-const GATEWAY_MCP_PACKAGE = "@agonx402/gateway-mcp";
-const PROTOCOL_MCP_PACKAGE = "@agonx402/protocol-mcp";
-const AGENT_WALLET_PACKAGE = "@agonx402/agent-wallet";
-const GATEWAY_CLI_PACKAGE = "@agonx402/gateway-cli";
-const PROTOCOL_CLI_PACKAGE = "@agonx402/protocol-cli";
+const PACKAGE_NAME = "@ryvonetwork/agentic";
+const GATEWAY_MCP_PACKAGE = "@ryvonetwork/gateway-mcp";
+const PROTOCOL_MCP_PACKAGE = "@ryvonetwork/protocol-mcp";
+const AGENT_WALLET_PACKAGE = "@ryvonetwork/agent-wallet";
+const GATEWAY_CLI_PACKAGE = "@ryvonetwork/gateway-cli";
+const PROTOCOL_CLI_PACKAGE = "@ryvonetwork/protocol-cli";
 const GLOBAL_CLI_PACKAGES = [GATEWAY_CLI_PACKAGE, AGENT_WALLET_PACKAGE, PROTOCOL_CLI_PACKAGE];
-const DEFAULT_GATEWAY_BASE_URL = "https://gateway.agonx402.com";
+const DEFAULT_GATEWAY_BASE_URL = "https://gateway.ryvo.network";
 const DEFAULT_WALLET_PROFILE = "default";
 const SKILLS = [
   {
-    name: "agon-gateway",
-    summary: "Agon Gateway x402, SIWX, Solana RPC/DAS, Helius Wallet, and Tokens API workflows.",
+    name: "ryvo-gateway",
+    summary: "Ryvo Gateway x402, SIWX, Solana RPC/DAS, Helius Wallet, and Tokens API workflows.",
   },
   {
-    name: "agon-protocol",
-    summary: "Agon Protocol participants, deposits, channels, settlement, withdrawals, and BLS caveats.",
+    name: "ryvo-protocol",
+    summary: "Ryvo Protocol participants, deposits, channels, settlement, withdrawals, and BLS caveats.",
   },
   {
-    name: "agon-gateway-payment-channels",
+    name: "ryvo-gateway-payment-channels",
     summary: "Gateway devnet payment-channel authorization with official devnet USDC commitments.",
   },
 ];
 
 function usage(exitCode = 0) {
   const text = `
-Agon Agentic Installer
+Ryvo Agentic Installer
 
 Usage:
-  agonx402-agentic install-skills [--target agents|codex|claude|all] [--target-dir PATH] [--wallet-profile NAME] [--skip-wallet-setup] [--dry-run]
-  agonx402-agentic setup [--target codex|claude-desktop|claude-code|cursor|windsurf|generic|all] [--dry-run]
+  ryvonetwork-agentic install-skills [--target agents|codex|claude|all] [--target-dir PATH] [--wallet-profile NAME] [--skip-wallet-setup] [--dry-run]
+  ryvonetwork-agentic setup [--target codex|claude-desktop|claude-code|cursor|windsurf|generic|all] [--dry-run]
                          [--wallet-profile NAME] [--skip-global-cli] [--skip-presign]
-  agonx402-agentic list
-  agonx402-agentic doctor
-  agonx402-agentic help
+  ryvonetwork-agentic list
+  ryvonetwork-agentic doctor
+  ryvonetwork-agentic help
 
 Default install-skills target is "all" -- installs into ~/.agents/skills, ~/.codex/skills,
 and ~/.claude/skills so Cursor, Claude Code, and Codex all see the bundled skills.
@@ -179,7 +179,7 @@ function installSkills(flags) {
       process.stdout.write(`[dry-run] target ${targetRoot}\n`);
     } else if (!quiet) {
       fs.mkdirSync(targetRoot, { recursive: true });
-      process.stdout.write(`Installing Agon skills into ${targetRoot}\n`);
+      process.stdout.write(`Installing Ryvo skills into ${targetRoot}\n`);
     } else {
       fs.mkdirSync(targetRoot, { recursive: true });
     }
@@ -196,7 +196,7 @@ function installSkills(flags) {
 
   if (!skipWalletSetup) {
     if (!quiet) {
-      process.stdout.write(`${dryRun ? "[dry-run] " : ""}Setting up default Agon agent wallet for SIWX/auth calls\n`);
+      process.stdout.write(`${dryRun ? "[dry-run] " : ""}Setting up default Ryvo agent wallet for SIWX/auth calls\n`);
     }
     setupWallet(flags);
   }
@@ -220,7 +220,7 @@ function parseSkillMetadata(skillName) {
 
 function listSkills() {
   assertBundledSkills();
-  process.stdout.write("Bundled Agon skills:\n");
+  process.stdout.write("Bundled Ryvo skills:\n");
   for (const skill of SKILLS) {
     const metadata = parseSkillMetadata(skill.name);
     process.stdout.write(`- ${metadata.name}: ${metadata.description}\n`);
@@ -252,8 +252,8 @@ function doctor() {
   printSetup();
 }
 
-function agonHome() {
-  return path.resolve(process.env.AGON_HOME || path.join(os.homedir(), ".agon"));
+function ryvoHome() {
+  return path.resolve(process.env.RYVO_HOME || path.join(os.homedir(), ".ryvo"));
 }
 
 function setupWallet(flags) {
@@ -277,7 +277,7 @@ function setupWallet(flags) {
 function installGlobalCli(flags) {
   if (flags.skipGlobalCli) {
     if (!flags.quiet) {
-      process.stdout.write("Skipping global CLI install (--skip-global-cli). Use `npx -y @agonx402/gateway-cli ...` for invocation.\n");
+      process.stdout.write("Skipping global CLI install (--skip-global-cli). Use `npx -y @ryvonetwork/gateway-cli ...` for invocation.\n");
     }
     return { ok: false, skipped: true };
   }
@@ -303,7 +303,7 @@ function installGlobalCli(flags) {
     if (!flags.quiet) {
       process.stderr.write(`\nGlobal CLI install did not complete${isPermission ? " (permission error)" : ""}.\n`);
       if (combined.trim()) process.stderr.write(combined.trim() + "\n");
-      process.stderr.write("\nAgon is still usable -- skills, wallet, and MCP registration are in place.\n");
+      process.stderr.write("\nRyvo is still usable -- skills, wallet, and MCP registration are in place.\n");
       if (isPermission) {
         if (process.platform === "win32") {
           process.stderr.write("Try a non-admin npm prefix or run from an elevated terminal:\n");
@@ -317,13 +317,13 @@ function installGlobalCli(flags) {
         process.stderr.write("Re-run manually:\n");
         process.stderr.write("  npm install -g " + GLOBAL_CLI_PACKAGES.join(" ") + "\n");
       }
-      process.stderr.write("Falling back to npx invocation in the meantime: `npx -y @agonx402/gateway-cli ...`.\n\n");
+      process.stderr.write("Falling back to npx invocation in the meantime: `npx -y @ryvonetwork/gateway-cli ...`.\n\n");
     }
     return { ok: false, permission: isPermission };
   }
   if (!flags.quiet && stdout) process.stdout.write(stdout);
   if (!flags.quiet) {
-    process.stdout.write(`Installed CLI packages globally. Bare commands now on PATH: agon, agon-gateway, agon-wallet, agon-protocol.\n`);
+    process.stdout.write(`Installed CLI packages globally. Bare commands now on PATH: ryvo, ryvo-gateway, ryvo-wallet, ryvo-protocol.\n`);
   }
   return { ok: true };
 }
@@ -336,7 +336,7 @@ function bundledLlmTxtPaths() {
   ];
 }
 
-function copyLlmTxtToAgonHome(flags) {
+function copyLlmTxtToryvoHome(flags) {
   const candidates = bundledLlmTxtPaths();
   const source = candidates.find((file) => fs.existsSync(file));
   if (!source) {
@@ -345,7 +345,7 @@ function copyLlmTxtToAgonHome(flags) {
     }
     return;
   }
-  const targetDir = agonHome();
+  const targetDir = ryvoHome();
   const target = path.join(targetDir, "llm.txt");
   const sourceContent = fs.readFileSync(source, "utf8");
   if (flags.dryRun) {
@@ -363,9 +363,9 @@ function copyLlmTxtToAgonHome(flags) {
 
 function mcpEnv(flags) {
   return {
-    AGON_GATEWAY_BASE_URL: String(flags.gatewayBaseUrl || DEFAULT_GATEWAY_BASE_URL),
-    AGON_SIGNER_COMMAND: String(flags.signerCommand || `npx -y ${AGENT_WALLET_PACKAGE} authorize`),
-    AGON_WALLET_PROFILE: String(flags.walletProfile || DEFAULT_WALLET_PROFILE),
+    RYVO_GATEWAY_BASE_URL: String(flags.gatewayBaseUrl || DEFAULT_GATEWAY_BASE_URL),
+    RYVO_SIGNER_COMMAND: String(flags.signerCommand || `npx -y ${AGENT_WALLET_PACKAGE} authorize`),
+    RYVO_WALLET_PROFILE: String(flags.walletProfile || DEFAULT_WALLET_PROFILE),
   };
 }
 
@@ -387,8 +387,8 @@ function protocolServerConfig() {
 function mcpJsonConfig(env) {
   return {
     mcpServers: {
-      "agon-gateway": gatewayServerConfig(env),
-      "agon-protocol": protocolServerConfig(),
+      "ryvo-gateway": gatewayServerConfig(env),
+      "ryvo-protocol": protocolServerConfig(),
     },
   };
 }
@@ -440,7 +440,7 @@ function writeJsonMcpConfig(filePath, env, flags) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const backupPath = backupFile(filePath);
   fs.writeFileSync(filePath, serialized);
-  process.stdout.write(`Registered Agon MCP in ${filePath}${backupPath ? ` (backup ${backupPath})` : ""}\n`);
+  process.stdout.write(`Registered Ryvo MCP in ${filePath}${backupPath ? ` (backup ${backupPath})` : ""}\n`);
 }
 
 function tomlString(value) {
@@ -463,16 +463,16 @@ function stripTomlSection(text, sectionName) {
 
 function writeCodexConfig(filePath, env, flags) {
   const existing = readTextFile(filePath) || "";
-  let next = stripTomlSection(existing, "mcp_servers.agon_gateway");
-  next = stripTomlSection(next, "mcp_servers.agon_protocol");
+  let next = stripTomlSection(existing, "mcp_servers.ryvo_gateway");
+  next = stripTomlSection(next, "mcp_servers.ryvo_protocol");
   const block = `
 
-[mcp_servers.agon_gateway]
+[mcp_servers.ryvo_gateway]
 command = "npx"
 args = ${tomlArray(["-y", GATEWAY_MCP_PACKAGE])}
 env = ${tomlInlineTable(env)}
 
-[mcp_servers.agon_protocol]
+[mcp_servers.ryvo_protocol]
 command = "npx"
 args = ${tomlArray(["-y", PROTOCOL_MCP_PACKAGE])}
 `;
@@ -490,7 +490,7 @@ args = ${tomlArray(["-y", PROTOCOL_MCP_PACKAGE])}
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const backupPath = backupFile(filePath);
   fs.writeFileSync(filePath, next);
-  process.stdout.write(`Registered Agon MCP in ${filePath}${backupPath ? ` (backup ${backupPath})` : ""}\n`);
+  process.stdout.write(`Registered Ryvo MCP in ${filePath}${backupPath ? ` (backup ${backupPath})` : ""}\n`);
 }
 
 function appDataDir() {
@@ -544,7 +544,7 @@ function clientAdapters() {
     },
     generic: {
       label: "Generic MCP JSON",
-      path: path.join(agonHome(), "mcp.json"),
+      path: path.join(ryvoHome(), "mcp.json"),
       requiredDir: null,
       write: writeJsonMcpConfig,
     },
@@ -582,7 +582,7 @@ function registerMcpClients(flags) {
 
 function runPresign(flags) {
   if (flags.dryRun) {
-    process.stdout.write("[dry-run] would run agon presign\n");
+    process.stdout.write("[dry-run] would run ryvo presign\n");
     return;
   }
   if (flags.skipPresign) {
@@ -590,8 +590,8 @@ function runPresign(flags) {
     return;
   }
   const candidates = process.platform === "win32"
-    ? ["agon.cmd", "agon.exe", "agon"]
-    : ["agon"];
+    ? ["ryvo.cmd", "ryvo.exe", "ryvo"]
+    : ["ryvo"];
   let resolved;
   for (const candidate of candidates) {
     const result = childProcess.spawnSync(process.platform === "win32" ? "where" : "which", [candidate], {
@@ -629,12 +629,12 @@ function runPresign(flags) {
 
 function setup(flags) {
   const dryRun = Boolean(flags.dryRun);
-  process.stdout.write(`${dryRun ? "[dry-run] " : ""}Setting up Agon agentic tools\n`);
+  process.stdout.write(`${dryRun ? "[dry-run] " : ""}Setting up Ryvo agentic tools\n`);
   installSkills({ target: "all", dryRun, quiet: true, skipWalletSetup: true });
-  if (!dryRun) process.stdout.write("Installed Agon skills into agents, codex, and claude skill directories.\n");
+  if (!dryRun) process.stdout.write("Installed Ryvo skills into agents, codex, and claude skill directories.\n");
   setupWallet(flags);
   installGlobalCli(flags);
-  copyLlmTxtToAgonHome(flags);
+  copyLlmTxtToryvoHome(flags);
   registerMcpClients(flags);
   runPresign(flags);
 }
@@ -643,41 +643,41 @@ function printSetup() {
   process.stdout.write(`Next steps:
 
 Gateway CLI (bare bins on PATH after \`setup --target all\`):
-  agon -p bitcoin
-  agon quote usdt --json
-  agon price bitcoin solana usdt
-  agon volume tesla gold --json
-  agon liquidity usdc usdt
-  agon search "bitcoin etf" --limit 5
-  agon risk usdt
-  agon chart solana --interval 1D
-  agon-gateway catalog
-  agon-gateway auth call GET /v1/x402/tokens/assets/search --query q=solana --query limit=1
-  agon-gateway auth call GET /v1/x402/tokens/assets/tesla/profile
+  ryvo -p bitcoin
+  ryvo quote usdt --json
+  ryvo price bitcoin solana usdt
+  ryvo volume tesla gold --json
+  ryvo liquidity usdc usdt
+  ryvo search "bitcoin etf" --limit 5
+  ryvo risk usdt
+  ryvo chart solana --interval 1D
+  ryvo-gateway catalog
+  ryvo-gateway auth call GET /v1/x402/tokens/assets/search --query q=solana --query limit=1
+  ryvo-gateway auth call GET /v1/x402/tokens/assets/tesla/profile
 
 Protocol CLI:
-  agon-protocol config
-  agon-protocol token show
+  ryvo-protocol config
+  ryvo-protocol token show
 
 Agent wallet:
-  agon-wallet show --profile default
+  ryvo-wallet show --profile default
 
-If a bare bin is not on PATH (e.g. you ran \`setup\` with \`--skip-global-cli\`, or the global install hit a permission error), the \`npx -y @agonx402/<package> ...\` form works on any machine without prior setup.
+If a bare bin is not on PATH (e.g. you ran \`setup\` with \`--skip-global-cli\`, or the global install hit a permission error), the \`npx -y @ryvonetwork/<package> ...\` form works on any machine without prior setup.
 
 MCP server commands (auto-spawned by client; you should not need to run these manually):
-  npx -y @agonx402/gateway-mcp
-  npx -y @agonx402/protocol-mcp
+  npx -y @ryvonetwork/gateway-mcp
+  npx -y @ryvonetwork/protocol-mcp
 
 Notes:
-- \`setup --target all\` is the one-shot installer: skills, default SIWX wallet, global CLI bins, MCP server registration in every supported client, and a local copy of llm.txt at \`~/.agon/llm.txt\`.
-- It registers Agon MCP servers in Codex (\`~/.codex/config.toml\`), Claude Desktop (\`claude_desktop_config.json\`), Claude Code (\`~/.claude.json\`), Cursor (\`~/.cursor/mcp.json\`), Windsurf, and a generic \`~/.agon/mcp.json\`. Existing MCP entries are preserved and a backup is written before any change.
+- \`setup --target all\` is the one-shot installer: skills, default SIWX wallet, global CLI bins, MCP server registration in every supported client, and a local copy of llm.txt at \`~/.ryvo/llm.txt\`.
+- It registers Ryvo MCP servers in Codex (\`~/.codex/config.toml\`), Claude Desktop (\`claude_desktop_config.json\`), Claude Code (\`~/.claude.json\`), Cursor (\`~/.cursor/mcp.json\`), Windsurf, and a generic \`~/.ryvo/mcp.json\`. Existing MCP entries are preserved and a backup is written before any change.
 - Use \`--skip-global-cli\` to skip the \`npm install -g\` step (you can fall back to \`npx -y\`).
-- Use \`--skip-presign\` to skip the post-install SIWX warmup. Without it, the first cold token quote does the full 402 + sign + retry; with it, the SIWX bearer is cached at \`~/.agon/siwx-cache.json\` and reused for ~5 minutes per the gateway's expirationTime.
+- Use \`--skip-presign\` to skip the post-install SIWX warmup. Without it, the first cold token quote does the full 402 + sign + retry; with it, the SIWX bearer is cached at \`~/.ryvo/siwx-cache.json\` and reused for ~5 minutes per the gateway's expirationTime.
 - Use \`--skip-wallet-setup\` only when another signer wallet is already configured.
 - Restart your agent client after \`setup\` so it re-reads the MCP server list.
 - Payment-channel routes are devnet-only in v1.
 - Tokens SIWX routes do not use payment channels and cover market data for crypto, currencies, treasuries, ETFs, metals, and stocks.
-- The default \`agon-wallet\` signer is SIWX-only (Tokens API). For x402 exact-payment routes set \`AGON_SIGNER_COMMAND\` to a payment-capable hook.
+- The default \`ryvo-wallet\` signer is SIWX-only (Tokens API). For x402 exact-payment routes set \`RYVO_SIGNER_COMMAND\` to a payment-capable hook.
 `);
 }
 

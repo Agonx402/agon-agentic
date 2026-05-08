@@ -6,25 +6,25 @@ const os = require("node:os");
 const path = require("node:path");
 const { Keypair } = require("@solana/web3.js");
 
-const DEFAULT_PROFILE = process.env.AGON_WALLET_PROFILE || "default";
+const DEFAULT_PROFILE = process.env.RYVO_WALLET_PROFILE || "default";
 const DEFAULT_MAINNET_CHAIN_ID = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
 
 function usage(exitCode = 0) {
   const text = `
-Agon Agent Wallet
+Ryvo Agent Wallet
 
-Convenience signer for Agon Gateway Tokens API (SIWX / sign-in-with-x) only.
-For x402 exact-payment routes, configure a different signer via AGON_SIGNER_COMMAND.
+Convenience signer for Ryvo Gateway Tokens API (SIWX / sign-in-with-x) only.
+For x402 exact-payment routes, configure a different signer via RYVO_SIGNER_COMMAND.
 
 Usage:
-  agon-wallet setup [--profile NAME] [--force]
-  agon-wallet authorize --stdin [--profile NAME] [--wallet-path PATH]
-  agon-wallet show [--profile NAME]
-  agon-wallet help
+  ryvo-wallet setup [--profile NAME] [--force]
+  ryvo-wallet authorize --stdin [--profile NAME] [--wallet-path PATH]
+  ryvo-wallet show [--profile NAME]
+  ryvo-wallet help
 
 Environment:
-  AGON_HOME               Defaults to ~/.agon
-  AGON_WALLET_PROFILE     Defaults to "default"
+  RYVO_HOME               Defaults to ~/.ryvo
+  RYVO_WALLET_PROFILE     Defaults to "default"
 `;
   process.stdout.write(text.trimStart());
   process.exit(exitCode);
@@ -58,12 +58,12 @@ function parseArgv(argv) {
   return { args, flags };
 }
 
-function agonHome() {
-  return path.resolve(process.env.AGON_HOME || path.join(os.homedir(), ".agon"));
+function ryvoHome() {
+  return path.resolve(process.env.RYVO_HOME || path.join(os.homedir(), ".ryvo"));
 }
 
 function walletPath(profile = DEFAULT_PROFILE) {
-  return path.join(agonHome(), "wallets", `${profile}.json`);
+  return path.join(ryvoHome(), "wallets", `${profile}.json`);
 }
 
 function readJson(filePath, fallback) {
@@ -129,7 +129,7 @@ function loadWallet(flags = {}) {
   const target = flags.walletPath ? path.resolve(String(flags.walletPath)) : walletPath(profile);
   const wallet = readJson(target, null);
   if (!wallet) {
-    throw new Error(`Wallet profile "${profile}" not found at ${target}. Run agon-wallet setup --profile ${profile}.`);
+    throw new Error(`Wallet profile "${profile}" not found at ${target}. Run ryvo-wallet setup --profile ${profile}.`);
   }
   const solana = wallet?.chains?.solana;
   if (!solana?.secretKey || !Array.isArray(solana.secretKey)) {
@@ -183,7 +183,7 @@ async function authorizeSiwx(input, flags) {
 
   const chain = selectedSiwxChain(challenge, input.chainId || input?.request?.chainId);
   if (!chain.chainId?.startsWith("solana:")) {
-    throw new Error(`Default Agon wallet can only sign Solana SIWX challenges, got ${chain.chainId}.`);
+    throw new Error(`Default Ryvo wallet can only sign Solana SIWX challenges, got ${chain.chainId}.`);
   }
 
   const httpClient = new x402HTTPClient(new x402Client()).onPaymentRequired(
@@ -227,7 +227,7 @@ async function authorize(flags) {
   if (kind === "siwx") {
     output = await authorizeSiwx(input, flags);
   } else if (kind === "x402-exact" || kind === "exact") {
-    throw new Error("This wallet only signs SIWX (Tokens API). For x402 exact routes, set AGON_SIGNER_COMMAND to a payment-capable signer.");
+    throw new Error("This wallet only signs SIWX (Tokens API). For x402 exact routes, set RYVO_SIGNER_COMMAND to a payment-capable signer.");
   } else {
     throw new Error(`Unsupported auth request kind/accessMode: ${kind || input.accessMode || "unknown"}.`);
   }

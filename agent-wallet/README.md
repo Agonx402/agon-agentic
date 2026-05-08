@@ -1,13 +1,13 @@
-# @agonx402/agent-wallet
+# @ryvonetwork/agent-wallet
 
-Default **SIWX-only** signer for Agon Gateway **Tokens API** routes (`sign-in-with-x`). It keeps first-time agent setup low-friction: create a wallet, point `AGON_SIGNER_COMMAND` at `authorize`.
+Default **SIWX-only** signer for Ryvo Gateway **Tokens API** routes (`sign-in-with-x`). It keeps first-time agent setup low-friction: create a wallet, point `RYVO_SIGNER_COMMAND` at `authorize`.
 
-**Not supported here:** x402 exact-payment signing. For paid RPC/DAS/Helius-style exact routes, use a different `AGON_SIGNER_COMMAND` that returns `PAYMENT-SIGNATURE` / `X-PAYMENT`.
+**Not supported here:** x402 exact-payment signing. For paid RPC/DAS/Helius-style exact routes, use a different `RYVO_SIGNER_COMMAND` that returns `PAYMENT-SIGNATURE` / `X-PAYMENT`.
 
 ```bash
-npx -y @agonx402/agent-wallet setup --profile default
-npx -y @agonx402/agent-wallet show --profile default
-npx -y @agonx402/agent-wallet authorize --stdin
+npx -y @ryvonetwork/agent-wallet setup --profile default
+npx -y @ryvonetwork/agent-wallet show --profile default
+npx -y @ryvonetwork/agent-wallet authorize --stdin
 ```
 
 `authorize` reads a normalized **`kind: "siwx"`** auth request from stdin and returns signer output:
@@ -22,4 +22,4 @@ npx -y @agonx402/agent-wallet authorize --stdin
 }
 ```
 
-External wallets replace this hook with the **same stdin JSON / stdout JSON** contract via `AGON_SIGNER_COMMAND`.
+External wallets replace this hook with the **same stdin JSON / stdout JSON** contract via `RYVO_SIGNER_COMMAND`.

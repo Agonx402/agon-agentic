@@ -1,4 +1,0 @@
-interface:
-  display_name: "Agon Protocol"
-  short_description: "Read and prepare Agon Protocol channel, settlement, and clearing flows."
-  default_prompt: "Use this skill when working with Agon Protocol participants, deposits, payment channels, commitments, settlement, BLS clearing, or protocol CLI/MCP tools."

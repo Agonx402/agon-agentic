@@ -1,4 +1,0 @@
-interface:
-  display_name: "Agon Gateway Channels"
-  short_description: "Use Agon payment channels for gateway API access."
-  default_prompt: "Use this skill when implementing or using Agon Gateway routes paid through Agon Protocol payment channels and signed cumulative commitments."

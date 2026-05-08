@@ -4,7 +4,7 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 
 const DEFAULT_CLUSTER = "devnet";
-const DEFAULT_PROGRAM_ID = process.env.AGON_PROTOCOL_PROGRAM_ID || "3UyUFeNsUYPpM6hMRf7H8wg3MKEXQ82rqnsXhZrUwgSD";
+const DEFAULT_PROGRAM_ID = process.env.RYVO_PROTOCOL_PROGRAM_ID || "HuyQoYfBEvVACTKcq8RTiDFm5k5ZBnX5we1UjWBTBeqT";
 const UNSUPPORTED_CURRENT_SDK_IDL = new Set([
   "cooperative_unlock_channel_funds",
   "register_participant_bls_key",
@@ -43,9 +43,9 @@ const ACTION_ALIASES = new Map([
 
 async function loadSdk() {
   try {
-    return await import("@agonx402/sdk");
+    return await import("@ryvonetwork/sdk");
   } catch {
-    const localSdk = path.resolve(__dirname, "..", "..", "agon-sdk", "packages", "sdk", "dist", "index.js");
+    const localSdk = path.resolve(__dirname, "..", "..", "ryvo-sdk", "packages", "sdk", "dist", "index.js");
     return import(pathToFileURL(localSdk).href);
   }
 }
@@ -62,7 +62,7 @@ async function loadPackage(name, localFallback) {
 }
 
 async function loadWeb3() {
-  return loadPackage("@solana/web3.js", path.resolve(__dirname, "..", "..", "agon-sdk", "node_modules", "@solana", "web3.js", "lib", "index.cjs.js"));
+  return loadPackage("@solana/web3.js", path.resolve(__dirname, "..", "..", "ryvo-sdk", "node_modules", "@solana", "web3.js", "lib", "index.cjs.js"));
 }
 
 function normalizeAction(action) {
@@ -178,7 +178,7 @@ function basePlan(ctx, action, instructionName, args, accounts, extra = {}) {
     messages: extra.messages || [],
     notes: [
       "This is a prepare-only plan. It does not sign or broadcast.",
-      "Wallet/application code should build the Anchor instruction with @agonx402/sdk and these exact args/accounts.",
+      "Wallet/application code should build the Anchor instruction with @ryvonetwork/sdk and these exact args/accounts.",
       ...(extra.notes || []),
     ],
   };
@@ -212,7 +212,7 @@ async function resolveToken(ctx, args, required = true) {
     return { ...token, source: "env-or-deployment-config" };
   } catch (error) {
     if (required) {
-      throw new Error(`${error.message} Pass --token-id or set AGON_PROTOCOL_DEVNET_USDC_TOKEN_ID.`);
+      throw new Error(`${error.message} Pass --token-id or set RYVO_PROTOCOL_DEVNET_USDC_TOKEN_ID.`);
     }
     return {
       tokenId: null,
@@ -288,7 +288,7 @@ function ed25519Message(ctx, args, token) {
   }
   const messageDomain = flag(args, "messageDomain")
     ? Buffer.from(String(flag(args, "messageDomain")), "base64")
-    : ctx.sdk.deriveMessageDomain(ctx.programId, ctx.sdk.AGON_CHAIN_IDS[ctx.cluster] || ctx.sdk.AGON_CHAIN_IDS.devnet);
+    : ctx.sdk.deriveMessageDomain(ctx.programId, ctx.sdk.RYVO_CHAIN_IDS[ctx.cluster] || ctx.sdk.RYVO_CHAIN_IDS.devnet);
   const authorizedSettler = flag(args, "authorizedSettler")
     ? asPubkey(flag(args, "authorizedSettler"), ctx.web3, "authorizedSettler")
     : null;
@@ -301,7 +301,7 @@ function ed25519Message(ctx, args, token) {
     authorizedSettler,
   });
   return {
-    kind: "agon-cmt-v5",
+    kind: "ryvo-cmt-v5",
     messageBase64: message.toString("base64"),
     signer: flag(args, "signer"),
     signature: flag(args, "signature"),
@@ -313,14 +313,14 @@ function clearingRoundMessage(ctx, args, token) {
   if (!blocks) return null;
   const messageDomain = flag(args, "messageDomain")
     ? Buffer.from(String(flag(args, "messageDomain")), "base64")
-    : ctx.sdk.deriveMessageDomain(ctx.programId, ctx.sdk.AGON_CHAIN_IDS[ctx.cluster] || ctx.sdk.AGON_CHAIN_IDS.devnet);
+    : ctx.sdk.deriveMessageDomain(ctx.programId, ctx.sdk.RYVO_CHAIN_IDS[ctx.cluster] || ctx.sdk.RYVO_CHAIN_IDS.devnet);
   const message = ctx.sdk.createClearingRoundMessage({
     messageDomain,
     tokenId: token.tokenId,
     blocks,
   });
   return {
-    kind: "agon-clearing-v4",
+    kind: "ryvo-clearing-v4",
     messageBase64: message.toString("base64"),
   };
 }
@@ -552,7 +552,7 @@ async function buildProtocolActionPlan(rawAction, args = {}) {
         token,
         requiredSigners: [submitter],
         messages: message ? [message] : [],
-        preInstructions: ["ed25519 signature verification for agon-cmt-v5 commitment"],
+        preInstructions: ["ed25519 signature verification for ryvo-cmt-v5 commitment"],
       });
     }
 
@@ -589,8 +589,8 @@ async function buildProtocolActionPlan(rawAction, args = {}) {
         token,
         requiredSigners: [submitter],
         messages: message ? [message] : [],
-        preInstructions: ["Agon-specific BLS aggregate signature verification inputs"],
-        notes: ["Agon BLS v1 is not a generic IETF BLS ciphersuite."],
+        preInstructions: ["Ryvo-specific BLS aggregate signature verification inputs"],
+        notes: ["Ryvo BLS v1 is not a generic IETF BLS ciphersuite."],
       });
     }
 
@@ -688,7 +688,7 @@ async function buildClearingPreview(args = {}) {
     settlementEventCompressionRatio: channels <= 0 ? "0:1" : `${channels}:1`,
     notes: [
       "Preview is an estimate. Final fit depends on account metas, ALT usage, signatures, and exact clearing blocks.",
-      "Agon BLS compresses many channel settlements into one clearing-round settlement instruction, but compute and account limits still apply.",
+      "Ryvo BLS compresses many channel settlements into one clearing-round settlement instruction, but compute and account limits still apply.",
     ],
   };
 }

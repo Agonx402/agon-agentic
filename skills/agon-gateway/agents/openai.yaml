@@ -1,4 +1,0 @@
-interface:
-  display_name: "Agon Gateway"
-  short_description: "Use Agon Gateway x402, Helius Wallet, and Tokens API routes."
-  default_prompt: "Use this skill when interacting with Agon Gateway routes, catalog metadata, x402 exact payment challenges, or SIWX Tokens API authentication."

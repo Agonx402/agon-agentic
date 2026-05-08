@@ -1,19 +1,19 @@
 {
-  "name": "@agonx402/agent-wallet",
+  "name": "@ryvonetwork/agent-wallet",
   "version": "0.4.2",
-  "description": "Generic local agent wallet and signer hook for Agon Gateway SIWX and x402 flows.",
+  "description": "Generic local agent wallet and signer hook for Ryvo Gateway SIWX and x402 flows.",
   "license": "MIT",
-  "homepage": "https://github.com/Agonx402/agon-gateway-agentic#readme",
+  "homepage": "https://github.com/Ryvonetwork/ryvo-agentic#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Agonx402/agon-gateway-agentic.git",
+    "url": "git+https://github.com/Ryvonetwork/ryvo-agentic.git",
     "directory": "agent-wallet"
   },
   "bugs": {
-    "url": "https://github.com/Agonx402/agon-gateway-agentic/issues"
+    "url": "https://github.com/Ryvonetwork/ryvo-agentic/issues"
   },
   "keywords": [
-    "agon",
+    "ryvo",
     "x402",
     "siwx",
     "solana",
@@ -21,10 +21,10 @@
     "wallet"
   ],
   "bin": {
-    "agon-wallet": "./agon-wallet.js"
+    "ryvo-wallet": "./ryvo-wallet.js"
   },
   "files": [
-    "agon-wallet.js",
+    "ryvo-wallet.js",
     "README.md"
   ],
   "engines": {
@@ -37,8 +37,8 @@
     "@x402/extensions": "^2.11.0"
   },
   "scripts": {
-    "check": "node --check agon-wallet.js",
-    "start": "node agon-wallet.js",
+    "check": "node --check ryvo-wallet.js",
+    "start": "node ryvo-wallet.js",
     "prepack": "npm run check"
   }
 }

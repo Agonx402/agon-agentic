@@ -1,55 +1,55 @@
 {
     "$schema":  "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-    "name":  "io.github.Agonx402/agon-gateway",
-    "description":  "MCP server for Agon Gateway x402, Helius Wallet, and Tokens API market data.",
+    "name":  "io.github.Ryvonetwork/ryvo-gateway",
+    "description":  "MCP server for Ryvo Gateway x402, Helius Wallet, and Tokens API market data.",
     "repository":  {
-                       "url":  "https://github.com/Agonx402/agon-gateway-agentic",
+                       "url":  "https://github.com/Ryvonetwork/ryvo-agentic",
                        "source":  "github"
                    },
     "version":  "0.4.2",
     "packages":  [
                      {
                          "registryType":  "npm",
-                         "identifier":  "@agonx402/gateway-mcp",
+                         "identifier":  "@ryvonetwork/gateway-mcp",
                          "version":  "0.4.2",
                          "transport":  {
                                            "type":  "stdio"
                                        },
                          "environmentVariables":  [
                                                      {
-                                                         "description":  "Optional Agon Gateway base URL. Defaults to https://gateway.agonx402.com.",
+                                                         "description":  "Optional Ryvo Gateway base URL. Defaults to https://gateway.ryvo.network.",
                                                          "isRequired":  false,
                                                          "format":  "string",
                                                          "isSecret":  false,
-                                                         "name":  "AGON_GATEWAY_BASE_URL"
+                                                         "name":  "RYVO_GATEWAY_BASE_URL"
                                                      },
                                                      {
-                                                         "description":  "Executed only by agon_gateway_auth_call after an HTTP 402: spawns once with the normalized auth-request JSON on stdin (same shape as agon_gateway_prepare_auth). Stdout must be JSON auth output (headers map, or SIWX address+signature). On Windows, npx/npm run under cmd.exe; treat AGON_SIGNER_COMMAND as untrusted if an attacker controls it.",
+                                                         "description":  "Executed only by ryvo_gateway_auth_call after an HTTP 402: spawns once with the normalized auth-request JSON on stdin (same shape as ryvo_gateway_prepare_auth). Stdout must be JSON auth output (headers map, or SIWX address+signature). On Windows, npx/npm run under cmd.exe; treat RYVO_SIGNER_COMMAND as untrusted if an attacker controls it.",
                                                          "isRequired":  false,
                                                          "format":  "string",
                                                          "isSecret":  false,
-                                                         "name":  "AGON_SIGNER_COMMAND"
+                                                         "name":  "RYVO_SIGNER_COMMAND"
                                                      },
                                                      {
-                                                         "description":  "Optional Agon wallet profile hint passed to signer hooks.",
+                                                         "description":  "Optional Ryvo wallet profile hint passed to signer hooks.",
                                                          "isRequired":  false,
                                                          "format":  "string",
                                                          "isSecret":  false,
-                                                         "name":  "AGON_WALLET_PROFILE"
+                                                         "name":  "RYVO_WALLET_PROFILE"
                                                      },
                                                      {
                                                          "description":  "Optional x402 maximum USD amount per request.",
                                                          "isRequired":  false,
                                                          "format":  "string",
                                                          "isSecret":  false,
-                                                         "name":  "AGON_PAYMENT_MAX_AMOUNT_USD"
+                                                         "name":  "RYVO_PAYMENT_MAX_AMOUNT_USD"
                                                      },
                                                      {
                                                          "description":  "Optional x402 daily authorized spend limit in USD.",
                                                          "isRequired":  false,
                                                          "format":  "string",
                                                          "isSecret":  false,
-                                                         "name":  "AGON_PAYMENT_DAILY_LIMIT_USD"
+                                                         "name":  "RYVO_PAYMENT_DAILY_LIMIT_USD"
                                                       }
                                                   ]
                      }

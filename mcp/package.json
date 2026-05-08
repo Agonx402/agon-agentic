@@ -1,20 +1,20 @@
 {
-    "name": "@agonx402/gateway-mcp",
+    "name": "@ryvonetwork/gateway-mcp",
     "version": "0.4.2",
-    "description": "MCP server for Agon Gateway discovery, calls, Tokens market data, and generic signer-hook auth.",
+    "description": "MCP server for Ryvo Gateway discovery, calls, Tokens market data, and generic signer-hook auth.",
     "license": "MIT",
-    "mcpName": "io.github.Agonx402/agon-gateway",
-    "homepage": "https://github.com/Agonx402/agon-gateway-agentic#readme",
+    "mcpName": "io.github.Ryvonetwork/ryvo-gateway",
+    "homepage": "https://github.com/Ryvonetwork/ryvo-agentic#readme",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/Agonx402/agon-gateway-agentic.git",
+        "url": "git+https://github.com/Ryvonetwork/ryvo-agentic.git",
         "directory": "mcp"
     },
     "bugs": {
-        "url": "https://github.com/Agonx402/agon-gateway-agentic/issues"
+        "url": "https://github.com/Ryvonetwork/ryvo-agentic/issues"
     },
     "keywords": [
-        "agon",
+        "ryvo",
         "x402",
         "solana",
         "gateway",
@@ -23,7 +23,7 @@
         "agents"
     ],
     "bin": {
-        "agon-gateway-mcp": "./server.js"
+        "ryvo-gateway-mcp": "./server.js"
     },
     "files": [
         "server.js",

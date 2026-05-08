@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ryvo Gateway Channels"
+  short_description: "Use Ryvo payment channels for gateway API access."
+  default_prompt: "Use this skill when implementing or using Ryvo Gateway routes paid through Ryvo Protocol payment channels and signed cumulative commitments."

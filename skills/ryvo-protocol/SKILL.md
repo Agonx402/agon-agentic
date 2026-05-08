@@ -1,19 +1,19 @@
 ---
-name: agon-protocol
-description: Use when a task involves Agon Protocol accounts, deposits, withdrawals, payment channels, channel locks/unlocks, cumulative commitments, bundle settlement, BLS clearing, protocol CLI/MCP tools, SDK usage, or building agents that interact with the Agon Solana program.
+name: ryvo-protocol
+description: Use when a task involves Ryvo Protocol accounts, deposits, withdrawals, payment channels, channel locks/unlocks, cumulative commitments, bundle settlement, BLS clearing, protocol CLI/MCP tools, SDK usage, or building agents that interact with the Ryvo Solana program.
 ---
 
-# Agon Protocol
+# Ryvo Protocol
 
-Use this skill when an agent needs to read Agon Protocol state, prepare protocol actions, reason about channel collateral, build signed commitment payloads, or choose a settlement path.
+Use this skill when an agent needs to read Ryvo Protocol state, prepare protocol actions, reason about channel collateral, build signed commitment payloads, or choose a settlement path.
 
 ## Hard Rules
 
-- Use `@agonx402/sdk` as the source of truth for PDAs, IDL, message bytes, and protocol helpers.
+- Use `@ryvonetwork/sdk` as the source of truth for PDAs, IDL, message bytes, and protocol helpers.
 - The protocol CLI and MCP are read + prepare only. They never store private keys, sign messages, or broadcast transactions.
 - Wallet layers sign and submit transactions. Do not ask protocol CLI/MCP tools to custody keys.
 - On devnet, gateway-channel v1 uses official devnet USDC only: `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`.
-- Resolve the official devnet USDC `token_id` from `TokenRegistry`, deployment config, or `AGON_PROTOCOL_DEVNET_USDC_TOKEN_ID`. Do not hardcode demo token IDs.
+- Resolve the official devnet USDC `token_id` from `TokenRegistry`, deployment config, or `RYVO_PROTOCOL_DEVNET_USDC_TOKEN_ID`. Do not hardcode demo token IDs.
 - Do not use synthetic stablecoin names in docs, skills, CLI/MCP output, gateway channel catalog copy, or examples.
 - Participant withdrawals are instant on the live devnet deployment.
 - Unilateral channel unlocks take 72 hours.
@@ -37,24 +37,24 @@ unilateralChannelUnlockDelay: 259200 seconds
 Prefer published packages in agent/runtime contexts:
 
 ```bash
-npx @agonx402/protocol-cli config
-npx @agonx402/protocol-cli token show
-npx @agonx402/protocol-cli participant show --owner <owner>
-npx @agonx402/protocol-cli channel show --payer-id <payer-id> --payee-id <payee-id> --token-id <token-id>
-npx @agonx402/protocol-cli channel headroom --payer-id <payer-id> --payee-id <payee-id> --token-id <token-id> --latest-accepted <amount>
-npx @agonx402/protocol-cli clearing preview --participants <n> --channels <n>
-npx @agonx402/protocol-cli prepare deposit --owner <owner> --owner-token-account <ata> --amount <base-units> --token-id <token-id>
-npx @agonx402/protocol-cli prepare create-channel --owner <payer-owner> --payee-owner <payee-owner> --payer-id <payer-id> --payee-id <payee-id> --token-id <token-id>
-npx @agonx402/protocol-cli prepare settle-bundle --payee-account <participant> --submitter <wallet> --payee-id <payee-id> --token-id <token-id> --entries '<json-array>'
-npx @agonx402/protocol-cli prepare gateway-commitment --payer-id <payer-id> --payee-id <payee-id> --token-id <token-id> --committed-amount <amount> --signer <authorized-signer>
-npx @agonx402/protocol-cli verify gateway-commitment --envelope <base64-json-envelope>
+npx @ryvonetwork/protocol-cli config
+npx @ryvonetwork/protocol-cli token show
+npx @ryvonetwork/protocol-cli participant show --owner <owner>
+npx @ryvonetwork/protocol-cli channel show --payer-id <payer-id> --payee-id <payee-id> --token-id <token-id>
+npx @ryvonetwork/protocol-cli channel headroom --payer-id <payer-id> --payee-id <payee-id> --token-id <token-id> --latest-accepted <amount>
+npx @ryvonetwork/protocol-cli clearing preview --participants <n> --channels <n>
+npx @ryvonetwork/protocol-cli prepare deposit --owner <owner> --owner-token-account <ata> --amount <base-units> --token-id <token-id>
+npx @ryvonetwork/protocol-cli prepare create-channel --owner <payer-owner> --payee-owner <payee-owner> --payer-id <payer-id> --payee-id <payee-id> --token-id <token-id>
+npx @ryvonetwork/protocol-cli prepare settle-bundle --payee-account <participant> --submitter <wallet> --payee-id <payee-id> --token-id <token-id> --entries '<json-array>'
+npx @ryvonetwork/protocol-cli prepare gateway-commitment --payer-id <payer-id> --payee-id <payee-id> --token-id <token-id> --committed-amount <amount> --signer <authorized-signer>
+npx @ryvonetwork/protocol-cli verify gateway-commitment --envelope <base64-json-envelope>
 ```
 
 Local repo equivalents:
 
 ```bash
-node C:/agon/agon/agentic/protocol-cli/agon-protocol.js config
-node C:/agon/agon/agentic/protocol-cli/agon-protocol.js token show
+node C:/Ryvo/Ryvo/agentic/protocol-cli/ryvo-protocol.js config
+node C:/Ryvo/Ryvo/agentic/protocol-cli/ryvo-protocol.js token show
 ```
 
 MCP:
@@ -62,9 +62,9 @@ MCP:
 ```json
 {
   "mcpServers": {
-    "agon-protocol": {
+    "ryvo-protocol": {
       "command": "npx",
-      "args": ["-y", "@agonx402/protocol-mcp"],
+      "args": ["-y", "@ryvonetwork/protocol-mcp"],
       "env": {
         "SOLANA_DEVNET_RPC_URL": "https://api.devnet.solana.com"
       }
@@ -76,7 +76,7 @@ MCP:
 MCP resource:
 
 ```text
-agon://protocol/llm.txt
+Ryvo://protocol/llm.txt
 ```
 
 MCP tools include config, token, participant, channel, headroom, clearing preview, prepare gateway commitment, verify gateway commitment, and concrete prepare action plans for the protocol instruction set.
@@ -89,9 +89,9 @@ Use the SDK instead of manually deriving PDAs or encoding messages:
 import * as anchor from "@coral-xyz/anchor";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import {
-  AgonClient,
-  AGON_CHAIN_IDS,
-  AGON_PROTOCOL_PROGRAM_ID,
+  RyvoClient,
+  RYVO_CHAIN_IDS,
+  RYVO_PROTOCOL_PROGRAM_ID,
   INBOUND_CHANNEL_POLICY,
   OFFICIAL_DEVNET_USDC_MINT,
   buildGatewayCommitmentPayload,
@@ -107,7 +107,7 @@ import {
   prepareCommitmentBundleSettlementPlan,
   resolveCanonicalDevnetUsdcToken,
   verifyGatewayCommitmentEnvelope,
-} from "@agonx402/sdk";
+} from "@ryvonetwork/sdk";
 ```
 
 Construct a client:
@@ -116,9 +116,9 @@ Construct a client:
 const provider = anchor.AnchorProvider.env();
 anchor.setProvider(provider);
 
-const client = new AgonClient({
+const client = new RyvoClient({
   provider,
-  programId: AGON_PROTOCOL_PROGRAM_ID,
+  programId: RYVO_PROTOCOL_PROGRAM_ID,
 });
 ```
 
@@ -150,7 +150,7 @@ const tokenId = usdc.tokenId;
 - `ChannelState`: directed payer-to-payee channel for one token, settled cumulative amount, locked collateral, pending unlock, authorized signer.
 - `vault-token-account`: PDA-owned SPL token account for a registered token.
 
-Use SDK PDA helpers or `AgonClient` address methods:
+Use SDK PDA helpers or `RyvoClient` address methods:
 
 ```ts
 client.globalConfigAddress();
@@ -189,11 +189,11 @@ Every on-chain instruction and when to use it:
 | `cooperative_unlock_channel_funds` | payer and payee | Immediately release locked channel collateral with both parties' signatures. |
 | `request_update_channel_authorized_signer` | payer | Start timelocked rotation of the key allowed to sign channel commitments. |
 | `execute_update_channel_authorized_signer` | payer after delay | Finalize authorized signer rotation. |
-| `settle_individual` | payee or authorized settler | Settle one signed cumulative `agon-cmt-v5` commitment for one channel. |
+| `settle_individual` | payee or authorized settler | Settle one signed cumulative `ryvo-cmt-v5` commitment for one channel. |
 | `settle_commitment_bundle` | payee or authorized settler | Settle many signed cumulative commitments for one payee in one transaction. |
-| `settle_clearing_round` | submitter | Settle an Agon-specific BLS cooperative clearing round across many participants. |
+| `settle_clearing_round` | submitter | Settle an Ryvo-specific BLS cooperative clearing round across many participants. |
 
-The SDK wraps common user-flow instructions through `AgonClient`. Admin and less-common generated IDL methods are still available through `client.program.methods.<instructionName>(...)`.
+The SDK wraps common user-flow instructions through `RyvoClient`. Admin and less-common generated IDL methods are still available through `client.program.methods.<instructionName>(...)`.
 
 ## Participant Setup Flow
 
@@ -247,7 +247,7 @@ await client
 
 ## Commitment Flow
 
-Agon commitments are cumulative. A commitment for `committedAmount = 10_000` means "this channel is authorized up to total 10_000", not "pay 10_000 again".
+Ryvo commitments are cumulative. A commitment for `committedAmount = 10_000` means "this channel is authorized up to total 10_000", not "pay 10_000 again".
 
 1. Fetch channel.
 2. Compute next cumulative amount from `settledCumulative`.
@@ -256,7 +256,7 @@ Agon commitments are cumulative. A commitment for `committedAmount = 10_000` mea
 5. Payee submits `settleIndividual` with Ed25519 verification pre-instruction.
 
 ```ts
-const messageDomain = deriveMessageDomain(client.programId, AGON_CHAIN_IDS.devnet);
+const messageDomain = deriveMessageDomain(client.programId, RYVO_CHAIN_IDS.devnet);
 const channel = await client.fetchChannel({ channelState });
 const committedAmount = nextCommitmentAmount(channel, 250_000n);
 
@@ -370,8 +370,8 @@ const verified = verifyGatewayCommitmentEnvelope(envelope);
 Request headers for gateway channel routes:
 
 ```text
-X-Agon-Request-Id: <stable-idempotency-key>
-AGON-COMMITMENT: <base64-json-envelope>
+X-Ryvo-Request-Id: <stable-idempotency-key>
+RYVO-COMMITMENT: <base64-json-envelope>
 ```
 
 ## Unlock And Withdrawal Logic
@@ -385,18 +385,18 @@ AGON-COMMITMENT: <base64-json-envelope>
 
 ## BLS Clearing
 
-Use `settle_clearing_round` only when participants are doing cooperative multilateral clearing and all required parties use Agon BLS keys.
+Use `settle_clearing_round` only when participants are doing cooperative multilateral clearing and all required parties use Ryvo BLS keys.
 
 Caveats:
 
-- Agon BLS v1 is Agon-specific. It hashes messages to a scalar times the G1 generator and is not a generic IETF hash-to-curve BLS ciphersuite.
-- Generic BLS libraries will not work unless they implement the Agon message/hash scheme exactly.
-- Use shared Agon implementation and test vectors.
+- Ryvo BLS v1 is Ryvo-specific. It hashes messages to a scalar times the G1 generator and is not a generic IETF hash-to-curve BLS ciphersuite.
+- Generic BLS libraries will not work unless they implement the Ryvo message/hash scheme exactly.
+- Use shared Ryvo implementation and test vectors.
 - BLS key rotation does not exist yet. If a BLS key is lost or compromised, migrate to a new participant identity for future BLS clearing.
 
 ## When To Use Raw IDL Methods
 
-`AgonClient` wraps the common integration path. For lower-level instructions not wrapped by a convenience method, use the generated Anchor program directly:
+`RyvoClient` wraps the common integration path. For lower-level instructions not wrapped by a convenience method, use the generated Anchor program directly:
 
 ```ts
 await client.program.methods

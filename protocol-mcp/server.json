@@ -1,16 +1,16 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.Agonx402/agon-protocol",
-  "description": "MCP server for Agon Protocol state reads and prepare-only payment-channel actions.",
+  "name": "io.github.Ryvonetwork/ryvo-protocol",
+  "description": "MCP server for Ryvo Protocol state reads and prepare-only payment-channel actions.",
   "repository": {
-    "url": "https://github.com/Agonx402/agon-gateway-agentic",
+    "url": "https://github.com/Ryvonetwork/ryvo-agentic",
     "source": "github"
   },
   "version": "0.4.2",
   "packages": [
     {
       "registryType": "npm",
-      "identifier": "@agonx402/protocol-mcp",
+      "identifier": "@ryvonetwork/protocol-mcp",
       "version": "0.4.2",
       "transport": {
         "type": "stdio"
@@ -24,15 +24,15 @@
           "isSecret": false
         },
         {
-          "name": "AGON_PROTOCOL_PROGRAM_ID",
-          "description": "Optional Agon Protocol program ID. Defaults to the live devnet deployment.",
+          "name": "RYVO_PROTOCOL_PROGRAM_ID",
+          "description": "Optional Ryvo Protocol program ID. Defaults to the live devnet deployment.",
           "isRequired": false,
           "format": "string",
           "isSecret": false
         },
         {
-          "name": "AGON_PROTOCOL_DEVNET_USDC_TOKEN_ID",
-          "description": "Official devnet USDC token ID in the deployed Agon token registry.",
+          "name": "RYVO_PROTOCOL_DEVNET_USDC_TOKEN_ID",
+          "description": "Official devnet USDC token ID in the deployed Ryvo token registry.",
           "isRequired": false,
           "format": "string",
           "isSecret": false

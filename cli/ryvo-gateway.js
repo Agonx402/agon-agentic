@@ -8,7 +8,7 @@ const os = require("node:os");
 const path = require("node:path");
 const pkg = require("./package.json");
 
-const DEFAULT_BASE_URL = process.env.AGON_GATEWAY_BASE_URL || "https://gateway.agonx402.com";
+const DEFAULT_BASE_URL = process.env.RYVO_GATEWAY_BASE_URL || "https://gateway.ryvo.network";
 const DEFAULT_MAX_AMOUNT_USD = "0.01";
 const DEFAULT_DAILY_LIMIT_USD = "1.00";
 const JSON_HEADERS = new Set([
@@ -22,86 +22,86 @@ const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvw
 
 function usage(exitCode = 0) {
   const text = `
-Agon Gateway CLI
+Ryvo Gateway CLI
 
 Usage:
-  agon-gateway -p <asset|ticker|mint> [--json]
-  agon-gateway presign [--json]
-  agon-gateway quote <asset...> [--mint MINT] [--asset-id ID] [--view auto|canonical|variant|stats] [--concurrency N] [--json]
-  agon-gateway batch-quote <asset|mint...> [--concurrency N] [--json]
-  agon-gateway price <asset...> [--json]
-  agon-gateway volume <asset...> [--json]
-  agon-gateway liquidity <asset...> [--json]
-  agon-gateway mcap <asset...> [--json]
-  agon-gateway change <asset...> [--json]
-  agon-gateway holders <asset...> [--json]
-  agon-gateway supply <asset...> [--json]
-  agon-gateway search <query> [--limit N] [--category NAME]
-  agon-gateway resolve <asset|ticker|mint>
-  agon-gateway asset <asset> [--include LIST] [--markets-limit N]
-  agon-gateway profile <asset>
-  agon-gateway variants <asset> [--kind KIND] [--variants-mode all]
-  agon-gateway variant-market <asset|mint> [--mint MINT]
-  agon-gateway variant-markets <mint...>
-  agon-gateway markets <asset|mint> [--limit N] [--offset N]
-  agon-gateway top-markets <asset> [--limit N] [--offset N]
-  agon-gateway tickers <asset> [--limit N] [--offset N]
-  agon-gateway risk <asset|mint> [--details]
-  agon-gateway description <asset|mint>
-  agon-gateway chart <asset> [--interval 1D] [--from UNIX] [--to UNIX]
-  agon-gateway ohlcv <asset|mint> [--interval 1H] [--from UNIX] [--to UNIX]
-  agon-gateway snapshots <mint...>
-  agon-gateway curated <all|majors|lsts|currencies|rwas|etfs|metals|stocks> [--group-by asset|mint]
-  agon-gateway health [--base-url URL]
-  agon-gateway catalog [--provider alchemy|helius|tokens] [--json]
-  agon-gateway routes [--provider NAME] [--surface NAME] [--access-mode exact|siwx|agon-channel] [--json]
-  agon-gateway show <path-or-method> [--provider NAME] [--surface NAME] [--json]
-  agon-gateway call <METHOD> <PATH> [--query k=v] [--body JSON|@file] [--payment-signature VALUE] [--x-payment VALUE] [--siwx VALUE] [--auth-driver COMMAND]
-  agon-gateway auth prepare <METHOD> <PATH> [--query k=v] [--body JSON|@file] [--address ADDRESS] [--json]
-  agon-gateway auth complete --prepare-auth FILE|- [--challenge FILE|-] --address ADDRESS --signature SIGNATURE [--signature-encoding hex|base58|base64|base64url] [--chain-id CHAIN]
-  agon-gateway auth call <METHOD> <PATH> [--auth-driver COMMAND] [--auth-arg VALUE] [--query k=v] [--body JSON|@file]
-  agon-gateway batch <requests-json|@file> [--auth-driver COMMAND] [--concurrency N]
-  agon-gateway agent-prompt
-  agon-gateway schema
-  agon-gateway doctor [--auth-driver COMMAND]
-  agon-gateway rpc <method> <params-json> [--provider helius|alchemy] [--cluster mainnet|devnet] [--auth-driver COMMAND]
-  agon-gateway das <method> <params-json> [--provider helius|alchemy] [--cluster mainnet|devnet] [--auth-driver COMMAND]
-  agon-gateway wallet <identity|balances|history|transfers|funded-by> <wallet> [--cluster mainnet|devnet] [--access-mode exact|agon-channel] [--query k=v] [--auth-driver COMMAND]
-  agon-gateway wallet batch-identity <json-array-or-comma-list> [--cluster mainnet|devnet] [--access-mode exact|agon-channel] [--auth-driver COMMAND]
-  agon-gateway tokens [METHOD] <tokens-path> [--query k=v] [--body JSON|@file] [--siwx VALUE] [--auth-driver COMMAND]
+  ryvo-gateway -p <asset|ticker|mint> [--json]
+  ryvo-gateway presign [--json]
+  ryvo-gateway quote <asset...> [--mint MINT] [--asset-id ID] [--view auto|canonical|variant|stats] [--concurrency N] [--json]
+  ryvo-gateway batch-quote <asset|mint...> [--concurrency N] [--json]
+  ryvo-gateway price <asset...> [--json]
+  ryvo-gateway volume <asset...> [--json]
+  ryvo-gateway liquidity <asset...> [--json]
+  ryvo-gateway mcap <asset...> [--json]
+  ryvo-gateway change <asset...> [--json]
+  ryvo-gateway holders <asset...> [--json]
+  ryvo-gateway supply <asset...> [--json]
+  ryvo-gateway search <query> [--limit N] [--category NAME]
+  ryvo-gateway resolve <asset|ticker|mint>
+  ryvo-gateway asset <asset> [--include LIST] [--markets-limit N]
+  ryvo-gateway profile <asset>
+  ryvo-gateway variants <asset> [--kind KIND] [--variants-mode all]
+  ryvo-gateway variant-market <asset|mint> [--mint MINT]
+  ryvo-gateway variant-markets <mint...>
+  ryvo-gateway markets <asset|mint> [--limit N] [--offset N]
+  ryvo-gateway top-markets <asset> [--limit N] [--offset N]
+  ryvo-gateway tickers <asset> [--limit N] [--offset N]
+  ryvo-gateway risk <asset|mint> [--details]
+  ryvo-gateway description <asset|mint>
+  ryvo-gateway chart <asset> [--interval 1D] [--from UNIX] [--to UNIX]
+  ryvo-gateway ohlcv <asset|mint> [--interval 1H] [--from UNIX] [--to UNIX]
+  ryvo-gateway snapshots <mint...>
+  ryvo-gateway curated <all|majors|lsts|currencies|rwas|etfs|metals|stocks> [--group-by asset|mint]
+  ryvo-gateway health [--base-url URL]
+  ryvo-gateway catalog [--provider alchemy|helius|tokens] [--json]
+  ryvo-gateway routes [--provider NAME] [--surface NAME] [--access-mode exact|siwx|ryvo-channel] [--json]
+  ryvo-gateway show <path-or-method> [--provider NAME] [--surface NAME] [--json]
+  ryvo-gateway call <METHOD> <PATH> [--query k=v] [--body JSON|@file] [--payment-signature VALUE] [--x-payment VALUE] [--siwx VALUE] [--auth-driver COMMAND]
+  ryvo-gateway auth prepare <METHOD> <PATH> [--query k=v] [--body JSON|@file] [--address ADDRESS] [--json]
+  ryvo-gateway auth complete --prepare-auth FILE|- [--challenge FILE|-] --address ADDRESS --signature SIGNATURE [--signature-encoding hex|base58|base64|base64url] [--chain-id CHAIN]
+  ryvo-gateway auth call <METHOD> <PATH> [--auth-driver COMMAND] [--auth-arg VALUE] [--query k=v] [--body JSON|@file]
+  ryvo-gateway batch <requests-json|@file> [--auth-driver COMMAND] [--concurrency N]
+  ryvo-gateway agent-prompt
+  ryvo-gateway schema
+  ryvo-gateway doctor [--auth-driver COMMAND]
+  ryvo-gateway rpc <method> <params-json> [--provider helius|alchemy] [--cluster mainnet|devnet] [--auth-driver COMMAND]
+  ryvo-gateway das <method> <params-json> [--provider helius|alchemy] [--cluster mainnet|devnet] [--auth-driver COMMAND]
+  ryvo-gateway wallet <identity|balances|history|transfers|funded-by> <wallet> [--cluster mainnet|devnet] [--access-mode exact|ryvo-channel] [--query k=v] [--auth-driver COMMAND]
+  ryvo-gateway wallet batch-identity <json-array-or-comma-list> [--cluster mainnet|devnet] [--access-mode exact|ryvo-channel] [--auth-driver COMMAND]
+  ryvo-gateway tokens [METHOD] <tokens-path> [--query k=v] [--body JSON|@file] [--siwx VALUE] [--auth-driver COMMAND]
 
 Examples:
-  agon -p bitcoin
-  agon presign
-  agon quote bitcoin solana usdt
-  agon batch-quote bitcoin solana gold tesla
-  agon price usdt
-  agon volume tesla gold --json
-  agon liquidity usdc usdt
-  agon mcap bitcoin ethereum
-  agon change solana
-  agon search "bitcoin etf" --limit 5
-  agon profile tesla
-  agon variants gold
-  agon chart solana --interval 1D
-  agon risk usdt
-  agon-gateway catalog --provider helius
-  agon-gateway auth prepare GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1 --json
-  AGON_SIGNER_COMMAND="npx -y @agonx402/agent-wallet authorize" agon-gateway auth call GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1
-  agon-gateway batch '[{"method":"GET","path":"/v1/x402/tokens/assets/solana"},{"method":"GET","path":"/v1/x402/tokens/assets/bitcoin"}]'
-  agon-gateway auth call GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1 --auth-driver my-wallet-auth-driver
-  agon-gateway auth call GET /v1/x402/tokens/assets/tesla/profile
-  agon-gateway auth call GET /v1/x402/tokens/assets/gold/price-chart --query interval=1D
-  agon-gateway rpc getBalance '["11111111111111111111111111111111"]' --provider helius
-  agon-gateway das getAsset '{"id":"<asset-id>"}'
-  agon-gateway wallet balances GQUtvPx89ZNCwmvQqFmH59bJcU8fW8siETpaxod7Aydz --query limit=25
-  agon-gateway tokens assets/search --query q=solana --query limit=5
+  ryvo -p bitcoin
+  ryvo presign
+  ryvo quote bitcoin solana usdt
+  ryvo batch-quote bitcoin solana gold tesla
+  ryvo price usdt
+  ryvo volume tesla gold --json
+  ryvo liquidity usdc usdt
+  ryvo mcap bitcoin ethereum
+  ryvo change solana
+  ryvo search "bitcoin etf" --limit 5
+  ryvo profile tesla
+  ryvo variants gold
+  ryvo chart solana --interval 1D
+  ryvo risk usdt
+  ryvo-gateway catalog --provider helius
+  ryvo-gateway auth prepare GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1 --json
+  RYVO_SIGNER_COMMAND="npx -y @ryvonetwork/agent-wallet authorize" ryvo-gateway auth call GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1
+  ryvo-gateway batch '[{"method":"GET","path":"/v1/x402/tokens/assets/solana"},{"method":"GET","path":"/v1/x402/tokens/assets/bitcoin"}]'
+  ryvo-gateway auth call GET /v1/x402/tokens/assets/search --query q=bitcoin --query limit=1 --auth-driver my-wallet-auth-driver
+  ryvo-gateway auth call GET /v1/x402/tokens/assets/tesla/profile
+  ryvo-gateway auth call GET /v1/x402/tokens/assets/gold/price-chart --query interval=1D
+  ryvo-gateway rpc getBalance '["11111111111111111111111111111111"]' --provider helius
+  ryvo-gateway das getAsset '{"id":"<asset-id>"}'
+  ryvo-gateway wallet balances GQUtvPx89ZNCwmvQqFmH59bJcU8fW8siETpaxod7Aydz --query limit=25
+  ryvo-gateway tokens assets/search --query q=solana --query limit=5
 
 Environment:
-  AGON_SIGNER_COMMAND              Default signer command for auth call and authenticated calls.
-  AGON_WALLET_PROFILE              Optional wallet profile passed through auth requests.
-  AGON_PAYMENT_MAX_AMOUNT_USD      Default x402 max per request.
-  AGON_PAYMENT_DAILY_LIMIT_USD     Default x402 daily authorized spend limit.
+  RYVO_SIGNER_COMMAND              Default signer command for auth call and authenticated calls.
+  RYVO_WALLET_PROFILE              Optional wallet profile passed through auth requests.
+  RYVO_PAYMENT_MAX_AMOUNT_USD      Default x402 max per request.
+  RYVO_PAYMENT_DAILY_LIMIT_USD     Default x402 daily authorized spend limit.
 `;
   process.stderr.write(text.trimStart());
   process.exit(exitCode);
@@ -444,7 +444,7 @@ async function requestGateway(flags, method, requestPath, options = {}) {
   const signerCommand = authDriverCommand(flags);
   if (!signerCommand) {
     if (options.requireSignerOn402) {
-      throw new Error("Gateway returned 402 Payment Required; provide --auth-driver or set AGON_SIGNER_COMMAND.");
+      throw new Error("Gateway returned 402 Payment Required; provide --auth-driver or set RYVO_SIGNER_COMMAND.");
     }
     return firstResponse;
   }
@@ -564,11 +564,11 @@ function inferRoute(pathname) {
   if (pathname.startsWith("/v1/x402/tokens")) {
     return { provider: "tokens", surface: "tokens", accessMode: "siwx", cluster: undefined };
   }
-  if (pathname.startsWith("/v1/agon-channel")) {
+  if (pathname.startsWith("/v1/ryvo-channel")) {
     if (parts[2] === "solana") {
-      return { provider: parts[4] || "helius", surface: parts[5], cluster: "devnet", accessMode: "agon-channel" };
+      return { provider: parts[4] || "helius", surface: parts[5], cluster: "devnet", accessMode: "ryvo-channel" };
     }
-    return { provider: parts[2] || "helius", surface: "wallet", cluster: "devnet", accessMode: "agon-channel" };
+    return { provider: parts[2] || "helius", surface: "wallet", cluster: "devnet", accessMode: "ryvo-channel" };
   }
   if (pathname.startsWith("/v1/x402/solana")) {
     return { provider: parts[4], surface: parts[5], cluster: parts[3], accessMode: "exact" };
@@ -686,12 +686,12 @@ function policyFromFlags(flags) {
   return {
     maxAmountUsdPerRequest: String(
       flags.maxAmountUsd
-      || process.env.AGON_PAYMENT_MAX_AMOUNT_USD
+      || process.env.RYVO_PAYMENT_MAX_AMOUNT_USD
       || DEFAULT_MAX_AMOUNT_USD,
     ),
     dailyLimitUsd: String(
       flags.dailyLimitUsd
-      || process.env.AGON_PAYMENT_DAILY_LIMIT_USD
+      || process.env.RYVO_PAYMENT_DAILY_LIMIT_USD
       || DEFAULT_DAILY_LIMIT_USD,
     ),
   };
@@ -720,7 +720,7 @@ async function prepareAuthRequest(flags, method, requestPath, options = {}) {
   let challengeResponse = options.challengeResponse;
   let decodedPaymentRequired;
 
-  if (accessMode !== "agon-channel") {
+  if (accessMode !== "ryvo-channel") {
     if (!challengeResponse) {
       challengeResponse = await requestGatewayRaw(flags, method, requestPath, {
         ...options,
@@ -753,7 +753,7 @@ async function prepareAuthRequest(flags, method, requestPath, options = {}) {
       url: request.url.toString(),
       bodyHashSha256: sha256Hex(request.bodyText),
     },
-    walletProfile: flags.walletProfile || process.env.AGON_WALLET_PROFILE,
+    walletProfile: flags.walletProfile || process.env.RYVO_WALLET_PROFILE,
     policy: policyFromFlags(flags),
     route,
     challenge: {
@@ -774,10 +774,10 @@ function authInstructions(accessMode) {
       "Retry the exact same request with SIGN-IN-WITH-X.",
     ];
   }
-  if (accessMode === "agon-channel") {
+  if (accessMode === "ryvo-channel") {
     return [
-      "Build the next cumulative Agon commitment for this route price and metadata.",
-      "Retry the exact same request with X-Agon-Request-Id and AGON-COMMITMENT.",
+      "Build the next cumulative Ryvo commitment for this route price and metadata.",
+      "Retry the exact same request with X-Ryvo-Request-Id and RYVO-COMMITMENT.",
     ];
   }
   return [
@@ -882,7 +882,7 @@ function completeSiwx(authRequest, input) {
 
 function splitCommandLine(value) {
   const text = String(value || "").trim();
-  if (!text) throw new Error("A signer command is required. Pass --auth-driver or set AGON_SIGNER_COMMAND.");
+  if (!text) throw new Error("A signer command is required. Pass --auth-driver or set RYVO_SIGNER_COMMAND.");
   const parts = [];
   let current = "";
   let quote = null;
@@ -913,7 +913,7 @@ function splitCommandLine(value) {
 }
 
 function authDriverCommand(flags) {
-  return singleFlag(flags, "authDriver") || process.env.AGON_SIGNER_COMMAND;
+  return singleFlag(flags, "authDriver") || process.env.RYVO_SIGNER_COMMAND;
 }
 
 function runAuthDriver(flags, authRequest, commandValue = authDriverCommand(flags)) {
@@ -982,7 +982,7 @@ function tokensPath(requestPath) {
 const SIWX_CACHE_SAFETY_MARGIN_MS = 30_000;
 
 function siwxCachePath() {
-  return path.join(os.homedir(), ".agon", "siwx-cache.json");
+  return path.join(os.homedir(), ".ryvo", "siwx-cache.json");
 }
 
 function loadSiwxCache() {
@@ -1213,12 +1213,12 @@ function looksLikeSolanaAddress(value) {
 
 function quoteAuthFlags(flags) {
   if (authDriverCommand(flags)) return flags;
-  const fixedSigner = "agon-wallet authorize --profile default";
+  const fixedSigner = "ryvo-wallet authorize --profile default";
   return {
     ...flags,
     authDriver: commandExists(fixedSigner)
       ? fixedSigner
-      : "npx -y @agonx402/agent-wallet authorize --profile default",
+      : "npx -y @ryvonetwork/agent-wallet authorize --profile default",
   };
 }
 
@@ -1232,7 +1232,7 @@ function assertQuoteResponse(response, label) {
 async function resolveQuoteTarget(flags, input) {
   const ref = normalizeQuoteRef(input || flags.price || flags.ref || flags.q);
   if (!ref && !flags.assetId && !flags.mint) {
-    throw new Error("quote requires an asset, ticker, or mint. Example: agon -p bitcoin");
+    throw new Error("quote requires an asset, ticker, or mint. Example: ryvo -p bitcoin");
   }
 
   const target = {
@@ -1727,11 +1727,11 @@ async function printTokensResult(value) {
 }
 
 function walletPrefix(cluster, accessMode) {
-  if (accessMode === "agon-channel") {
+  if (accessMode === "ryvo-channel") {
     if (cluster && cluster !== "devnet") {
-      throw new Error("Agon payment-channel routes are devnet-only. Use --cluster devnet or omit --cluster.");
+      throw new Error("Ryvo payment-channel routes are devnet-only. Use --cluster devnet or omit --cluster.");
     }
-    return "/v1/agon-channel/helius/devnet/wallet";
+    return "/v1/ryvo-channel/helius/devnet/wallet";
   }
   return cluster === "devnet"
     ? "/v1/x402/helius/devnet/wallet"
@@ -1745,9 +1745,9 @@ function walletPath(cluster, action, wallet, accessMode) {
 }
 
 function routeCluster(flags) {
-  if (flags.accessMode === "agon-channel") {
+  if (flags.accessMode === "ryvo-channel") {
     if (flags.cluster && flags.cluster !== "devnet") {
-      throw new Error("Agon payment-channel routes are devnet-only. Use --cluster devnet or omit --cluster.");
+      throw new Error("Ryvo payment-channel routes are devnet-only. Use --cluster devnet or omit --cluster.");
     }
     return "devnet";
   }
@@ -1755,31 +1755,31 @@ function routeCluster(flags) {
 }
 
 function agentPromptText() {
-  return `Agon Gateway agent prompt
+  return `Ryvo Gateway agent prompt
 
-Use https://gateway.agonx402.com unless the user provides AGON_GATEWAY_BASE_URL.
-For known documented routes, call the route directly. Start with GET /v1/catalog only when the route shape is unknown, a direct call fails, or the user asks about route availability. For any API call the catalog can satisfy, use Agon Gateway first.
+Use https://gateway.ryvo.network unless the user provides RYVO_GATEWAY_BASE_URL.
+For known documented routes, call the route directly. Start with GET /v1/catalog only when the route shape is unknown, a direct call fails, or the user asks about route availability. For any API call the catalog can satisfy, use Ryvo Gateway first.
 For exact routes, send the final request once to get a 402 x402 challenge, then retry the exact same method, URL, query, and body with PAYMENT-SIGNATURE or X-PAYMENT from the user's payment layer.
 For siwx routes, sign the sign-in-with-x challenge with the user's wallet and retry with SIGN-IN-WITH-X. Tokens API routes are SIWX-authenticated and free; do not use payment channels for Tokens. Tokens covers market data for crypto, currencies, treasuries, ETFs, metals, stocks, and related Solana token variants.
-For Tokens API work, prefer high-level CLI shortcuts before raw route strings. Common commands include: agon -p <asset>, agon quote <assets...>, agon price <assets...>, agon volume <assets...>, agon liquidity <assets...>, agon mcap <assets...>, agon change <assets...>, agon holders <assets...>, agon supply <assets...>, agon search <query>, agon resolve <asset>, agon curated <list>, agon profile <asset>, agon variants <asset>, agon markets <asset>, agon tickers <asset>, agon risk <asset>, agon chart <asset>, agon ohlcv <asset>, and agon snapshots <mints...>. Internally, if assetId or mint is known, call assets/:assetId or assets/:assetId/variant-market directly; resolve/search only unknown names once; read volume24hUSD for 24h volume; use ohlcv only for custom windows like 25h.
-For repeated quote calls, prefer a local/global CLI executable and fixed AGON_SIGNER_COMMAND over npx -y. Use gateway-cli batch or Tokens batch endpoints for several assets.
-For agon-channel routes, use devnet only and send X-Agon-Request-Id plus AGON-COMMITMENT built from official devnet USDC channel metadata.
-For market data answers, label the Agon field used: canonicalMarket, stats, primaryVariant.market, profile.data, tickers, or candles. Use outside APIs only when the user asks for a cross-check or the catalog lacks the data.
-The Gateway CLI/MCP do not custody keys themselves. Use AGON_SIGNER_COMMAND or --auth-driver to delegate SIWX/x402 signing to the default Agon agent wallet or any external wallet/policy system.`;
+For Tokens API work, prefer high-level CLI shortcuts before raw route strings. Common commands include: ryvo -p <asset>, ryvo quote <assets...>, ryvo price <assets...>, ryvo volume <assets...>, ryvo liquidity <assets...>, ryvo mcap <assets...>, ryvo change <assets...>, ryvo holders <assets...>, ryvo supply <assets...>, ryvo search <query>, ryvo resolve <asset>, ryvo curated <list>, ryvo profile <asset>, ryvo variants <asset>, ryvo markets <asset>, ryvo tickers <asset>, ryvo risk <asset>, ryvo chart <asset>, ryvo ohlcv <asset>, and ryvo snapshots <mints...>. Internally, if assetId or mint is known, call assets/:assetId or assets/:assetId/variant-market directly; resolve/search only unknown names once; read volume24hUSD for 24h volume; use ohlcv only for custom windows like 25h.
+For repeated quote calls, prefer a local/global CLI executable and fixed RYVO_SIGNER_COMMAND over npx -y. Use gateway-cli batch or Tokens batch endpoints for several assets.
+For ryvo-channel routes, use devnet only and send X-Ryvo-Request-Id plus RYVO-COMMITMENT built from official devnet USDC channel metadata.
+For market data answers, label the Ryvo field used: canonicalMarket, stats, primaryVariant.market, profile.data, tickers, or candles. Use outside APIs only when the user asks for a cross-check or the catalog lacks the data.
+The Gateway CLI/MCP do not custody keys themselves. Use RYVO_SIGNER_COMMAND or --auth-driver to delegate SIWX/x402 signing to the default Ryvo agent wallet or any external wallet/policy system.`;
 }
 
 function authSchema() {
   return {
     authRequestVersion: 1,
     commands: {
-      prepare: "agon-gateway auth prepare <METHOD> <PATH> [--query k=v] [--body JSON|@file] [--address ADDRESS]",
-      complete: "agon-gateway auth complete --prepare-auth FILE|- --address ADDRESS --signature SIGNATURE",
-      call: "agon-gateway auth call <METHOD> <PATH> [--auth-driver COMMAND] or AGON_SIGNER_COMMAND",
+      prepare: "ryvo-gateway auth prepare <METHOD> <PATH> [--query k=v] [--body JSON|@file] [--address ADDRESS]",
+      complete: "ryvo-gateway auth complete --prepare-auth FILE|- --address ADDRESS --signature SIGNATURE",
+      call: "ryvo-gateway auth call <METHOD> <PATH> [--auth-driver COMMAND] or RYVO_SIGNER_COMMAND",
     },
     authRequest: {
       version: 1,
-      kind: "siwx | x402-exact | agon-channel",
-      accessMode: "siwx | exact | agon-channel",
+      kind: "siwx | x402-exact | ryvo-channel",
+      accessMode: "siwx | exact | ryvo-channel",
       method: "GET | POST",
       url: "absolute gateway URL",
       path: "/v1/...",
@@ -1797,7 +1797,7 @@ function authSchema() {
       { headers: { "SIGN-IN-WITH-X": "<base64-json>" } },
       { headers: { "X-PAYMENT": "<x402-payment>" } },
       { headers: { "PAYMENT-SIGNATURE": "<signature>" } },
-      { headers: { "X-Agon-Request-Id": "<id>", "AGON-COMMITMENT": "<base64-json>" } },
+      { headers: { "X-Ryvo-Request-Id": "<id>", "RYVO-COMMITMENT": "<base64-json>" } },
       { address: "<wallet>", signature: "<signature>", signatureEncoding: "hex | base58 | base64 | base64url", chainId: "solana:..." },
     ],
   };
@@ -1839,7 +1839,7 @@ async function doctor(flags) {
   const signerCommand = authDriverCommand(flags);
   const authDriver = signerCommand ? {
     configured: true,
-    source: flags.authDriver ? "--auth-driver" : "AGON_SIGNER_COMMAND",
+    source: flags.authDriver ? "--auth-driver" : "RYVO_SIGNER_COMMAND",
     command: signerCommand,
     found: commandExists(signerCommand),
   } : { configured: false };
@@ -2163,8 +2163,8 @@ async function main() {
       const cluster = routeCluster(flags);
       const provider = flags.provider || "helius";
       const exactPath = `/v1/x402/solana/${cluster}/${provider}/rpc/${method}`;
-      const channelPath = `/v1/agon-channel/solana/devnet/${provider}/rpc/${method}`;
-      const requestPath = flags.accessMode === "agon-channel" ? channelPath : exactPath;
+      const channelPath = `/v1/ryvo-channel/solana/devnet/${provider}/rpc/${method}`;
+      const requestPath = flags.accessMode === "ryvo-channel" ? channelPath : exactPath;
       printJson(await requestGateway(flags, "POST", requestPath, { body: { params } }));
       return;
     }
@@ -2179,8 +2179,8 @@ async function main() {
       const cluster = routeCluster(flags);
       const provider = flags.provider || "helius";
       const exactPath = `/v1/x402/solana/${cluster}/${provider}/das/${method}`;
-      const channelPath = `/v1/agon-channel/solana/devnet/${provider}/das/${method}`;
-      const requestPath = flags.accessMode === "agon-channel" ? channelPath : exactPath;
+      const channelPath = `/v1/ryvo-channel/solana/devnet/${provider}/das/${method}`;
+      const requestPath = flags.accessMode === "ryvo-channel" ? channelPath : exactPath;
       printJson(await requestGateway(flags, "POST", requestPath, { body: { params } }));
       return;
     }

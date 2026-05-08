@@ -1,18 +1,18 @@
 {
-  "name": "@agonx402/agentic",
+  "name": "@ryvonetwork/agentic",
   "version": "0.4.2",
-  "description": "Installer for Agon Gateway and Agon Protocol agent skills, default SIWX signer wallet, MCP servers, and signer hooks.",
+  "description": "Installer for Ryvo Gateway and Ryvo Protocol agent skills, default SIWX signer wallet, MCP servers, and signer hooks.",
   "license": "MIT",
-  "homepage": "https://github.com/Agonx402/agon-gateway-agentic#readme",
+  "homepage": "https://github.com/Ryvonetwork/ryvo-agentic#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Agonx402/agon-gateway-agentic.git"
+    "url": "git+https://github.com/Ryvonetwork/ryvo-agentic.git"
   },
   "bugs": {
-    "url": "https://github.com/Agonx402/agon-gateway-agentic/issues"
+    "url": "https://github.com/Ryvonetwork/ryvo-agentic/issues"
   },
   "keywords": [
-    "agon",
+    "ryvo",
     "x402",
     "solana",
     "agents",
@@ -20,7 +20,7 @@
     "payment-channels"
   ],
   "bin": {
-    "agonx402-agentic": "./install.js"
+    "ryvonetwork-agentic": "./install.js"
   },
   "files": [
     "install.js",

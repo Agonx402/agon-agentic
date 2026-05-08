@@ -8,22 +8,22 @@ const { buildClearingPreview, buildProtocolActionPlan } = require("./protocol-pl
 
 const DEFAULT_RPC_URL = process.env.ANCHOR_PROVIDER_URL || process.env.SOLANA_DEVNET_RPC_URL || "https://api.devnet.solana.com";
 const DEFAULT_CLUSTER = "devnet";
-const DEFAULT_PROGRAM_ID = process.env.AGON_PROTOCOL_PROGRAM_ID || "3UyUFeNsUYPpM6hMRf7H8wg3MKEXQ82rqnsXhZrUwgSD";
+const DEFAULT_PROGRAM_ID = process.env.RYVO_PROTOCOL_PROGRAM_ID || "HuyQoYfBEvVACTKcq8RTiDFm5k5ZBnX5we1UjWBTBeqT";
 
 function usage(exitCode = 0) {
   const text = `
-Agon Protocol CLI
+Ryvo Protocol CLI
 
 Usage:
-  agon-protocol config [--rpc-url URL] [--program-id PUBKEY]
-  agon-protocol token show [--mint PUBKEY] [--token-id ID]
-  agon-protocol participant show --owner PUBKEY [--rpc-url URL] [--program-id PUBKEY]
-  agon-protocol channel show --payer-id ID --payee-id ID [--token-id ID] [--rpc-url URL] [--program-id PUBKEY]
-  agon-protocol channel headroom --payer-id ID --payee-id ID --latest-accepted AMOUNT [--token-id ID]
-  agon-protocol clearing preview --participants N --channels N [--token-id ID]
-  agon-protocol prepare <flow> [--key value ...]
-  agon-protocol prepare gateway-commitment --payer-id ID --payee-id ID --committed-amount AMOUNT --signer PUBKEY [--program-id PUBKEY] [--token-id ID] [--signature BASE64]
-  agon-protocol verify gateway-commitment --envelope BASE64_JSON
+  ryvo-protocol config [--rpc-url URL] [--program-id PUBKEY]
+  ryvo-protocol token show [--mint PUBKEY] [--token-id ID]
+  ryvo-protocol participant show --owner PUBKEY [--rpc-url URL] [--program-id PUBKEY]
+  ryvo-protocol channel show --payer-id ID --payee-id ID [--token-id ID] [--rpc-url URL] [--program-id PUBKEY]
+  ryvo-protocol channel headroom --payer-id ID --payee-id ID --latest-accepted AMOUNT [--token-id ID]
+  ryvo-protocol clearing preview --participants N --channels N [--token-id ID]
+  ryvo-protocol prepare <flow> [--key value ...]
+  ryvo-protocol prepare gateway-commitment --payer-id ID --payee-id ID --committed-amount AMOUNT --signer PUBKEY [--program-id PUBKEY] [--token-id ID] [--signature BASE64]
+  ryvo-protocol verify gateway-commitment --envelope BASE64_JSON
 
 Read commands may fetch chain state. Prepare commands do not sign or broadcast.
 Default devnet token is official USDC: 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU
@@ -83,9 +83,9 @@ function optionalNumber(flags, name) {
 
 async function loadSdk() {
   try {
-    return await import("@agonx402/sdk");
+    return await import("@ryvonetwork/sdk");
   } catch {
-    const localSdk = path.resolve(__dirname, "..", "..", "agon-sdk", "packages", "sdk", "dist", "index.js");
+    const localSdk = path.resolve(__dirname, "..", "..", "ryvo-sdk", "packages", "sdk", "dist", "index.js");
     return import(pathToFileURL(localSdk).href);
   }
 }
@@ -102,10 +102,10 @@ async function loadPackage(name, localFallback) {
 }
 
 async function loadClient(flags) {
-  const [{ AgonClient }, anchor, web3] = await Promise.all([
+  const [{ RyvoClient }, anchor, web3] = await Promise.all([
     loadSdk(),
-    loadPackage("@coral-xyz/anchor", path.resolve(__dirname, "..", "..", "agon-sdk", "node_modules", "@coral-xyz", "anchor", "dist", "cjs", "index.js")),
-    loadPackage("@solana/web3.js", path.resolve(__dirname, "..", "..", "agon-sdk", "node_modules", "@solana", "web3.js", "lib", "index.cjs.js")),
+    loadPackage("@coral-xyz/anchor", path.resolve(__dirname, "..", "..", "ryvo-sdk", "node_modules", "@coral-xyz", "anchor", "dist", "cjs", "index.js")),
+    loadPackage("@solana/web3.js", path.resolve(__dirname, "..", "..", "ryvo-sdk", "node_modules", "@solana", "web3.js", "lib", "index.cjs.js")),
   ]);
   const programId = flags.programId
     ? new web3.PublicKey(String(flags.programId))
@@ -114,10 +114,10 @@ async function loadClient(flags) {
   const readOnlyWallet = {
     publicKey: web3.PublicKey.default,
     signTransaction: async () => {
-      throw new Error("agon-protocol CLI is read + prepare only and never signs.");
+      throw new Error("ryvo-protocol CLI is read + prepare only and never signs.");
     },
     signAllTransactions: async () => {
-      throw new Error("agon-protocol CLI is read + prepare only and never signs.");
+      throw new Error("ryvo-protocol CLI is read + prepare only and never signs.");
     },
   };
   const provider = new anchor.AnchorProvider(connection, readOnlyWallet, {
@@ -125,7 +125,7 @@ async function loadClient(flags) {
     preflightCommitment: "confirmed",
   });
   return {
-    client: new AgonClient({ provider, programId }),
+    client: new RyvoClient({ provider, programId }),
     programId,
     connection,
     web3,
@@ -246,7 +246,7 @@ async function commandPrepare(args, flags) {
       tokenDecimals: token.decimals ?? 6,
       signature: flags.signature === undefined ? undefined : String(flags.signature),
       authorizedSettler: flags.authorizedSettler
-        ? new (await loadPackage("@solana/web3.js", path.resolve(__dirname, "..", "..", "agon-sdk", "node_modules", "@solana", "web3.js", "lib", "index.cjs.js"))).PublicKey(String(flags.authorizedSettler))
+        ? new (await loadPackage("@solana/web3.js", path.resolve(__dirname, "..", "..", "ryvo-sdk", "node_modules", "@solana", "web3.js", "lib", "index.cjs.js"))).PublicKey(String(flags.authorizedSettler))
         : null,
     });
     const message = sdk.createGatewayCommitmentMessage(payload);

@@ -1,19 +1,19 @@
 {
-  "name": "@agonx402/gateway-cli",
+  "name": "@ryvonetwork/gateway-cli",
   "version": "0.4.2",
-  "description": "CLI for discovering, batching, and calling Agon Gateway routes with generic signer hooks.",
+  "description": "CLI for discovering, batching, and calling Ryvo Gateway routes with generic signer hooks.",
   "license": "MIT",
-  "homepage": "https://github.com/Agonx402/agon-gateway-agentic#readme",
+  "homepage": "https://github.com/Ryvonetwork/ryvo-agentic#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Agonx402/agon-gateway-agentic.git",
+    "url": "git+https://github.com/Ryvonetwork/ryvo-agentic.git",
     "directory": "cli"
   },
   "bugs": {
-    "url": "https://github.com/Agonx402/agon-gateway-agentic/issues"
+    "url": "https://github.com/Ryvonetwork/ryvo-agentic/issues"
   },
   "keywords": [
-    "agon",
+    "ryvo",
     "x402",
     "solana",
     "gateway",
@@ -21,19 +21,19 @@
     "agents"
   ],
   "bin": {
-    "agon-gateway": "./agon-gateway.js",
-    "agon": "./agon-gateway.js"
+    "ryvo-gateway": "./ryvo-gateway.js",
+    "ryvo": "./ryvo-gateway.js"
   },
   "files": [
-    "agon-gateway.js",
+    "ryvo-gateway.js",
     "README.md"
   ],
   "engines": {
     "node": ">=18"
   },
   "scripts": {
-    "check": "node --check agon-gateway.js",
-    "start": "node agon-gateway.js",
+    "check": "node --check ryvo-gateway.js",
+    "start": "node ryvo-gateway.js",
     "prepack": "npm run check"
   }
 }

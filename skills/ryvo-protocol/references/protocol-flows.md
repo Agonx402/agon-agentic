@@ -1,4 +1,4 @@
-# Agon Protocol Flows
+# Ryvo Protocol Flows
 
 This reference is for agents that need a fuller operational playbook than `SKILL.md`. Keep actions read + prepare unless the user explicitly asks a wallet or deployment script to sign and broadcast.
 
@@ -33,7 +33,7 @@ Gateway-channel v1 uses official devnet USDC:
 Resolve `token_id` in this order:
 
 1. explicit `tokenId` supplied by the caller
-2. `AGON_PROTOCOL_DEVNET_USDC_TOKEN_ID`
+2. `RYVO_PROTOCOL_DEVNET_USDC_TOKEN_ID`
 3. live `TokenRegistry` entry matching the official mint
 4. deployment config entry matching the official mint
 
@@ -99,7 +99,7 @@ Timelocked signer rotation for a channel. Use when the key authorized to sign cu
 
 ### settle_individual
 
-Settles one `agon-cmt-v5` cumulative commitment. Submitter must be the payee or an authorized settler included in the message. Requires an Ed25519 verification instruction in the same transaction.
+Settles one `ryvo-cmt-v5` cumulative commitment. Submitter must be the payee or an authorized settler included in the message. Requires an Ed25519 verification instruction in the same transaction.
 
 ### settle_commitment_bundle
 
@@ -107,13 +107,13 @@ Settles multiple unilateral commitments for one payee. This is the right settlem
 
 ### settle_clearing_round
 
-Settles cooperative multilateral clearing with Agon-specific BLS. Use only for coordinated clearing rounds, not gateway request settlement v1.
+Settles cooperative multilateral clearing with Ryvo-specific BLS. Use only for coordinated clearing rounds, not gateway request settlement v1.
 
 ## Commitment Validation Checklist
 
 Before accepting or settling a unilateral commitment:
 
-- message version is `agon-cmt-v5`
+- message version is `ryvo-cmt-v5`
 - message domain equals live deployment domain
 - payer ID, payee ID, token ID, and channel PDA match
 - token ID resolves to the expected mint
@@ -155,7 +155,7 @@ Use this decision tree:
 
 ## SDK Transaction Pattern
 
-Every `AgonClient` state-changing method returns an Anchor methods builder:
+Every `RyvoClient` state-changing method returns an Anchor methods builder:
 
 ```ts
 await client

@@ -8,28 +8,28 @@ const path = require("node:path");
 const childProcess = require("node:child_process");
 const pkg = require("./package.json");
 
-const DEFAULT_BASE_URL = process.env.AGON_GATEWAY_BASE_URL || "https://gateway.agonx402.com";
+const DEFAULT_BASE_URL = process.env.RYVO_GATEWAY_BASE_URL || "https://gateway.ryvo.network";
 const DEFAULT_MAX_AMOUNT_USD = "0.01";
 const DEFAULT_DAILY_LIMIT_USD = "1.00";
 const PROTOCOL_VERSION = "2024-11-05";
-const LLM_RESOURCE_URI = "agon://gateway/llm.txt";
+const LLM_RESOURCE_URI = "ryvo://gateway/llm.txt";
 const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 const tools = [
   {
-    name: "agon_gateway_health",
-    description: "Check Agon Gateway health.",
+    name: "ryvo_gateway_health",
+    description: "Check Ryvo Gateway health.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
       properties: {
-        baseUrl: { type: "string", description: "Gateway base URL. Defaults to AGON_GATEWAY_BASE_URL or production." },
+        baseUrl: { type: "string", description: "Gateway base URL. Defaults to RYVO_GATEWAY_BASE_URL or production." },
       },
     },
   },
   {
-    name: "agon_gateway_catalog",
-    description: "Fetch the live Agon Gateway route catalog, optionally scoped to a provider.",
+    name: "ryvo_gateway_catalog",
+    description: "Fetch the live Ryvo Gateway route catalog, optionally scoped to a provider.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -40,7 +40,7 @@ const tools = [
     },
   },
   {
-    name: "agon_gateway_find_route",
+    name: "ryvo_gateway_find_route",
     description: "Find routes in the live catalog by provider, surface, method, path substring, or access mode.",
     inputSchema: {
       type: "object",
@@ -51,13 +51,13 @@ const tools = [
         surface: { type: "string", enum: ["rpc", "das", "wallet", "tokens"] },
         method: { type: "string" },
         path: { type: "string" },
-        accessMode: { type: "string", enum: ["exact", "siwx", "agon-channel"] },
+        accessMode: { type: "string", enum: ["exact", "siwx", "ryvo-channel"] },
       },
     },
   },
   {
-    name: "agon_gateway_prepare_solana",
-    description: "Prepare a Solana RPC or DAS Agon Gateway request object without sending it.",
+    name: "ryvo_gateway_prepare_solana",
+    description: "Prepare a Solana RPC or DAS Ryvo Gateway request object without sending it.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -67,15 +67,15 @@ const tools = [
         cluster: { type: "string", enum: ["mainnet", "devnet"], default: "mainnet" },
         provider: { type: "string", enum: ["alchemy", "helius"], default: "helius" },
         surface: { type: "string", enum: ["rpc", "das"] },
-        accessMode: { type: "string", enum: ["exact", "agon-channel"], default: "exact" },
+        accessMode: { type: "string", enum: ["exact", "ryvo-channel"], default: "exact" },
         method: { type: "string" },
         params: { description: "RPC params array or DAS params object." },
       },
     },
   },
   {
-    name: "agon_gateway_prepare_wallet",
-    description: "Prepare a Helius Wallet Agon Gateway request object without sending it, including x402 or agon-channel paths.",
+    name: "ryvo_gateway_prepare_wallet",
+    description: "Prepare a Helius Wallet Ryvo Gateway request object without sending it, including x402 or ryvo-channel paths.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -83,7 +83,7 @@ const tools = [
       properties: {
         baseUrl: { type: "string" },
         cluster: { type: "string", enum: ["mainnet", "devnet"], default: "mainnet" },
-        accessMode: { type: "string", enum: ["exact", "agon-channel"], default: "exact" },
+        accessMode: { type: "string", enum: ["exact", "ryvo-channel"], default: "exact" },
         action: { type: "string", enum: ["identity", "balances", "history", "transfers", "funded-by", "batch-identity"] },
         wallet: { type: "string", description: "Wallet address for non-batch wallet actions." },
         wallets: { type: "array", items: { type: "string" }, description: "Wallet list for batch-identity." },
@@ -97,8 +97,8 @@ const tools = [
     },
   },
   {
-    name: "agon_gateway_call",
-    description: "Call an Agon Gateway route. Use without payment/SIWX headers to issue a challenge, then retry with PAYMENT-SIGNATURE, X-PAYMENT, or SIGN-IN-WITH-X. Devnet RPC/DAS/Wallet routes settle in devnet USDC; mainnet routes settle in mainnet USDC; Tokens API SIWX routes are free.",
+    name: "ryvo_gateway_call",
+    description: "Call an Ryvo Gateway route. Use without payment/SIWX headers to issue a challenge, then retry with PAYMENT-SIGNATURE, X-PAYMENT, or SIGN-IN-WITH-X. Devnet RPC/DAS/Wallet routes settle in devnet USDC; mainnet routes settle in mainnet USDC; Tokens API SIWX routes are free.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -122,7 +122,7 @@ const tools = [
     },
   },
   {
-    name: "agon_gateway_prepare_auth",
+    name: "ryvo_gateway_prepare_auth",
     description: "Prepare wallet/payment authorization JSON for a Gateway route without signing, paying, or running local commands.",
     inputSchema: {
       type: "object",
@@ -132,7 +132,7 @@ const tools = [
         baseUrl: { type: "string" },
         method: { type: "string" },
         path: { type: "string" },
-        accessMode: { type: "string", enum: ["exact", "siwx", "agon-channel"] },
+        accessMode: { type: "string", enum: ["exact", "siwx", "ryvo-channel"] },
         address: { type: "string", description: "Optional wallet address used to render a concrete SIWX signing message." },
         chainId: { type: "string", description: "Optional SIWX chain ID to select from the challenge." },
         query: {
@@ -147,7 +147,7 @@ const tools = [
     },
   },
   {
-    name: "agon_gateway_complete_siwx",
+    name: "ryvo_gateway_complete_siwx",
     description: "Build a SIGN-IN-WITH-X header from a prepared auth envelope plus a wallet address and signature.",
     inputSchema: {
       type: "object",
@@ -156,7 +156,7 @@ const tools = [
       properties: {
         prepareAuth: {
           type: "object",
-          description: "Full JSON object returned by agon_gateway_prepare_auth (includes challenge.siwx after a 402).",
+          description: "Full JSON object returned by ryvo_gateway_prepare_auth (includes challenge.siwx after a 402).",
         },
         address: { type: "string" },
         signature: { type: "string" },
@@ -166,7 +166,7 @@ const tools = [
     },
   },
   {
-    name: "agon_gateway_call_with_headers",
+    name: "ryvo_gateway_call_with_headers",
     description: "Call a Gateway route with caller-supplied auth/payment headers. MCP does not sign, pay, or execute wallet commands. Devnet routes expect devnet-USDC payment headers; mainnet routes expect mainnet-USDC headers; Tokens API SIWX routes are free.",
     inputSchema: {
       type: "object",
@@ -188,8 +188,8 @@ const tools = [
     },
   },
   {
-    name: "agon_gateway_auth_call",
-    description: "Generic escape hatch: call any Agon Gateway route, run the configured signer hook on a 402, and retry. For Tokens market-data questions, prefer the higher-level agon_token_quote / agon_token_resolve / agon_token_chart / agon_token_search / agon_token_batch_quote tools -- they pre-format the route, parse the response, and avoid shell quoting. Use this tool only for routes those higher-level tools do not cover (custom Tokens routes, Solana RPC, DAS, Helius Wallet, payment-channel routes). Devnet RPC/DAS/Wallet routes pay in devnet USDC; mainnet RPC/DAS/Wallet routes pay in mainnet USDC; Tokens API SIWX routes are free on either cluster. The signer must hold the USDC mint for the cluster of the route.",
+    name: "ryvo_gateway_auth_call",
+    description: "Generic escape hatch: call any Ryvo Gateway route, run the configured signer hook on a 402, and retry. For Tokens market-data questions, prefer the higher-level ryvo_token_quote / ryvo_token_resolve / ryvo_token_chart / ryvo_token_search / ryvo_token_batch_quote tools -- they pre-format the route, parse the response, and avoid shell quoting. Use this tool only for routes those higher-level tools do not cover (custom Tokens routes, Solana RPC, DAS, Helius Wallet, payment-channel routes). Devnet RPC/DAS/Wallet routes pay in devnet USDC; mainnet RPC/DAS/Wallet routes pay in mainnet USDC; Tokens API SIWX routes are free on either cluster. The signer must hold the USDC mint for the cluster of the route.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -206,7 +206,7 @@ const tools = [
         },
         body: { description: "JSON body. Omit for GET/HEAD." },
         headers: { type: "object", additionalProperties: { type: "string" } },
-        signerCommand: { type: "string", description: "Signer hook command. Defaults to AGON_SIGNER_COMMAND." },
+        signerCommand: { type: "string", description: "Signer hook command. Defaults to RYVO_SIGNER_COMMAND." },
         walletProfile: { type: "string", description: "Optional wallet profile hint passed to the signer hook." },
         maxAmountUsd: { type: "string", description: "Optional x402 max per request." },
         dailyLimitUsd: { type: "string", description: "Optional x402 daily authorized spend limit." },
@@ -214,24 +214,24 @@ const tools = [
     },
   },
   {
-    name: "agon_token_quote",
-    description: "USE THIS FIRST for any current price / quote / market-cap / 24h volume / supply / liquidity question about a single asset -- crypto (BTC, SOL, ETH, USDC, USDT, ...), tokenized stock (TSLA, AAPL, MSFT, NVDA, ...), ETF, treasury, metal (gold, silver), or fiat currency. Free over SIWX (no payment). Returns the canonical market view plus optional variant view. Do NOT fall back to web search, shell commands, or third-party finance APIs for this -- prefer this tool. Pass either an Agon canonical assetId (e.g. 'bitcoin', 'solana', 'tesla', 'gold', 'usd') or include a Solana mint to look up a specific tokenized variant. If only a free-text ticker/name is known, call agon_token_resolve first to get the assetId.",
+    name: "ryvo_token_quote",
+    description: "USE THIS FIRST for any current price / quote / market-cap / 24h volume / supply / liquidity question about a single asset -- crypto (BTC, SOL, ETH, USDC, USDT, ...), tokenized stock (TSLA, AAPL, MSFT, NVDA, ...), ETF, treasury, metal (gold, silver), or fiat currency. Free over SIWX (no payment). Returns the canonical market view plus optional variant view. Do NOT fall back to web search, shell commands, or third-party finance APIs for this -- prefer this tool. Pass either an Ryvo canonical assetId (e.g. 'bitcoin', 'solana', 'tesla', 'gold', 'usd') or include a Solana mint to look up a specific tokenized variant. If only a free-text ticker/name is known, call ryvo_token_resolve first to get the assetId.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
       properties: {
         baseUrl: { type: "string" },
-        assetId: { type: "string", description: "Canonical Agon assetId (e.g. 'bitcoin', 'solana', 'tesla', 'gold', 'usd'). Use agon_token_resolve first if only a free-text ticker/name is known." },
+        assetId: { type: "string", description: "Canonical Ryvo assetId (e.g. 'bitcoin', 'solana', 'tesla', 'gold', 'usd'). Use ryvo_token_resolve first if only a free-text ticker/name is known." },
         mint: { type: "string", description: "Solana mint for a tokenized variant. When set, calls /v1/x402/tokens/assets/:assetId/variant-market?mint=<mint>. Requires assetId." },
-        signerCommand: { type: "string", description: "Signer hook command. Defaults to AGON_SIGNER_COMMAND. Tokens routes use SIWX (free)." },
+        signerCommand: { type: "string", description: "Signer hook command. Defaults to RYVO_SIGNER_COMMAND. Tokens routes use SIWX (free)." },
         walletProfile: { type: "string" },
       },
       required: ["assetId"],
     },
   },
   {
-    name: "agon_token_resolve",
-    description: "Resolve a free-text reference (human name, ticker, or ambiguous phrase like 'tesla', 'gold', 'btc', 'BTC ETF') to a canonical Agon assetId, primary mint, and preferred market view. Free over SIWX. Call this BEFORE agon_token_quote / agon_token_chart whenever the user gives a name/ticker instead of a canonical assetId. Cache the result for the rest of the task.",
+    name: "ryvo_token_resolve",
+    description: "Resolve a free-text reference (human name, ticker, or ambiguous phrase like 'tesla', 'gold', 'btc', 'BTC ETF') to a canonical Ryvo assetId, primary mint, and preferred market view. Free over SIWX. Call this BEFORE ryvo_token_quote / ryvo_token_chart whenever the user gives a name/ticker instead of a canonical assetId. Cache the result for the rest of the task.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -245,14 +245,14 @@ const tools = [
     },
   },
   {
-    name: "agon_token_chart",
-    description: "USE THIS FIRST for any historical price / OHLCV / candle / time-window question about an Agon-tracked asset (crypto, tokenized stock, ETF, treasury, metal, currency). Free over SIWX. Use for historical prices, custom time windows (24h, 7D, 30D, ...), and candle aggregation. Do NOT fall back to web search, shell commands, or third-party finance APIs for this.",
+    name: "ryvo_token_chart",
+    description: "USE THIS FIRST for any historical price / OHLCV / candle / time-window question about an Ryvo-tracked asset (crypto, tokenized stock, ETF, treasury, metal, currency). Free over SIWX. Use for historical prices, custom time windows (24h, 7D, 30D, ...), and candle aggregation. Do NOT fall back to web search, shell commands, or third-party finance APIs for this.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
       properties: {
         baseUrl: { type: "string" },
-        assetId: { type: "string", description: "Canonical Agon assetId." },
+        assetId: { type: "string", description: "Canonical Ryvo assetId." },
         interval: { type: "string", description: "Candle interval, e.g. '1H', '4H', '1D', '1W'. Defaults to '1D'." },
         from: { type: "string", description: "Optional ISO timestamp or unix-ms lower bound." },
         to: { type: "string", description: "Optional ISO timestamp or unix-ms upper bound." },
@@ -263,8 +263,8 @@ const tools = [
     },
   },
   {
-    name: "agon_token_search",
-    description: "USE THIS FIRST for any 'find an asset / what tokens exist for X / list assets matching Y' question. Free over SIWX. Returns ranked candidates with assetIds, symbols, and short descriptions for queries like 'bitcoin etf', 'tokenized treasury', 'gold mining', 'AI tokens'. Prefer agon_token_resolve when the query is a single name/ticker; use search when the query is broader or ambiguous. Do NOT use web search for asset discovery on Agon-tracked classes (crypto, tokenized stocks, ETFs, treasuries, metals, currencies).",
+    name: "ryvo_token_search",
+    description: "USE THIS FIRST for any 'find an asset / what tokens exist for X / list assets matching Y' question. Free over SIWX. Returns ranked candidates with assetIds, symbols, and short descriptions for queries like 'bitcoin etf', 'tokenized treasury', 'gold mining', 'AI tokens'. Prefer ryvo_token_resolve when the query is a single name/ticker; use search when the query is broader or ambiguous. Do NOT use web search for asset discovery on Ryvo-tracked classes (crypto, tokenized stocks, ETFs, treasuries, metals, currencies).",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -279,8 +279,8 @@ const tools = [
     },
   },
   {
-    name: "agon_token_batch_quote",
-    description: "USE THIS FIRST for any multi-asset quote / 'price of X, Y, Z' / batch market-data question when the inputs are Solana mints. Free over SIWX. Up to 50 mints issues a single GET /v1/x402/tokens/assets/variant-markets; >50 issues POST /v1/x402/tokens/assets/market-snapshots (max 250). One round trip, no shell quoting. Prefer this over agon_token_quote in a loop, and over `npx -y @agonx402/gateway-cli batch` shell commands. If inputs are canonical names/tickers (not mints), resolve each via agon_token_resolve first to get mints, then batch-quote.",
+    name: "ryvo_token_batch_quote",
+    description: "USE THIS FIRST for any multi-asset quote / 'price of X, Y, Z' / batch market-data question when the inputs are Solana mints. Free over SIWX. Up to 50 mints issues a single GET /v1/x402/tokens/assets/variant-markets; >50 issues POST /v1/x402/tokens/assets/market-snapshots (max 250). One round trip, no shell quoting. Prefer this over ryvo_token_quote in a loop, and over `npx -y @ryvonetwork/gateway-cli batch` shell commands. If inputs are canonical names/tickers (not mints), resolve each via ryvo_token_resolve first to get mints, then batch-quote.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -385,11 +385,11 @@ function appendQuery(url, query) {
 }
 
 function walletPrefix(cluster, accessMode) {
-  if (accessMode === "agon-channel") {
+  if (accessMode === "ryvo-channel") {
     if (cluster && cluster !== "devnet") {
-      throw new Error("Agon payment-channel routes are devnet-only. Use cluster=devnet or omit cluster.");
+      throw new Error("Ryvo payment-channel routes are devnet-only. Use cluster=devnet or omit cluster.");
     }
-    return "/v1/agon-channel/helius/devnet/wallet";
+    return "/v1/ryvo-channel/helius/devnet/wallet";
   }
   return cluster === "devnet"
     ? "/v1/x402/helius/devnet/wallet"
@@ -397,10 +397,10 @@ function walletPrefix(cluster, accessMode) {
 }
 
 function channelInstructions(accessMode) {
-  return accessMode === "agon-channel"
+  return accessMode === "ryvo-channel"
     ? [
-      "Send this exact method and path with X-Agon-Request-Id and AGON-COMMITMENT.",
-      "AGON-COMMITMENT must be a signed Agon cumulative commitment envelope denominated in official devnet USDC.",
+      "Send this exact method and path with X-Ryvo-Request-Id and RYVO-COMMITMENT.",
+      "RYVO-COMMITMENT must be a signed Ryvo cumulative commitment envelope denominated in official devnet USDC.",
     ]
     : [
       "Send this exact method, path, and body without payment headers to receive a 402 challenge.",
@@ -409,9 +409,9 @@ function channelInstructions(accessMode) {
 }
 
 function routeCluster(args) {
-  if ((args.accessMode || "exact") === "agon-channel") {
+  if ((args.accessMode || "exact") === "ryvo-channel") {
     if (args.cluster && args.cluster !== "devnet") {
-      throw new Error("Agon payment-channel routes are devnet-only. Use cluster=devnet or omit cluster.");
+      throw new Error("Ryvo payment-channel routes are devnet-only. Use cluster=devnet or omit cluster.");
     }
     return "devnet";
   }
@@ -539,11 +539,11 @@ function inferRoute(pathname) {
   if (pathname.startsWith("/v1/x402/tokens")) {
     return { provider: "tokens", surface: "tokens", accessMode: "siwx", cluster: undefined };
   }
-  if (pathname.startsWith("/v1/agon-channel")) {
+  if (pathname.startsWith("/v1/ryvo-channel")) {
     if (parts[2] === "solana") {
-      return { provider: parts[4] || "helius", surface: parts[5], cluster: "devnet", accessMode: "agon-channel" };
+      return { provider: parts[4] || "helius", surface: parts[5], cluster: "devnet", accessMode: "ryvo-channel" };
     }
-    return { provider: parts[2] || "helius", surface: "wallet", cluster: "devnet", accessMode: "agon-channel" };
+    return { provider: parts[2] || "helius", surface: "wallet", cluster: "devnet", accessMode: "ryvo-channel" };
   }
   if (pathname.startsWith("/v1/x402/solana")) {
     return { provider: parts[4], surface: parts[5], cluster: parts[3], accessMode: "exact" };
@@ -597,7 +597,7 @@ const SIWX_CACHE_SAFETY_MARGIN_MS = 30_000;
 const siwxMemCache = new Map();
 
 function siwxCachePath() {
-  return path.join(os.homedir(), ".agon", "siwx-cache.json");
+  return path.join(os.homedir(), ".ryvo", "siwx-cache.json");
 }
 
 function loadSiwxDiskCache() {
@@ -778,12 +778,12 @@ function policyFromArgs(args) {
   return {
     maxAmountUsdPerRequest: String(
       args.maxAmountUsd
-      || process.env.AGON_PAYMENT_MAX_AMOUNT_USD
+      || process.env.RYVO_PAYMENT_MAX_AMOUNT_USD
       || DEFAULT_MAX_AMOUNT_USD,
     ),
     dailyLimitUsd: String(
       args.dailyLimitUsd
-      || process.env.AGON_PAYMENT_DAILY_LIMIT_USD
+      || process.env.RYVO_PAYMENT_DAILY_LIMIT_USD
       || DEFAULT_DAILY_LIMIT_USD,
     ),
   };
@@ -796,10 +796,10 @@ function authInstructions(accessMode) {
       "Retry the exact same request with SIGN-IN-WITH-X.",
     ];
   }
-  if (accessMode === "agon-channel") {
+  if (accessMode === "ryvo-channel") {
     return [
-      "Build the next cumulative Agon commitment for this route price and metadata.",
-      "Retry the exact same request with X-Agon-Request-Id and AGON-COMMITMENT.",
+      "Build the next cumulative Ryvo commitment for this route price and metadata.",
+      "Retry the exact same request with X-Ryvo-Request-Id and RYVO-COMMITMENT.",
     ];
   }
   return [
@@ -832,7 +832,7 @@ async function prepareAuth(args, existingChallengeResponse) {
   let challengeResponse = existingChallengeResponse;
   let paymentRequired;
 
-  if (accessMode !== "agon-channel") {
+  if (accessMode !== "ryvo-channel") {
     if (!challengeResponse) {
       challengeResponse = await fetchGateway({
         baseUrl,
@@ -862,7 +862,7 @@ async function prepareAuth(args, existingChallengeResponse) {
       url: url.toString(),
       bodyHashSha256: sha256Hex(bodyText),
     },
-    walletProfile: args.walletProfile || process.env.AGON_WALLET_PROFILE,
+    walletProfile: args.walletProfile || process.env.RYVO_WALLET_PROFILE,
     policy: policyFromArgs(args),
     route,
     challenge: {
@@ -953,7 +953,7 @@ function completeSiwx(authRequest, input) {
 
 function splitCommandLine(value) {
   const text = String(value || "").trim();
-  if (!text) throw new Error("A signer command is required. Pass signerCommand or set AGON_SIGNER_COMMAND.");
+  if (!text) throw new Error("A signer command is required. Pass signerCommand or set RYVO_SIGNER_COMMAND.");
   const parts = [];
   let current = "";
   let quote = null;
@@ -1045,9 +1045,9 @@ async function authCall(args) {
     delete cachedHeaders["SIGN-IN-WITH-X"];
   }
 
-  const signerCommand = args.signerCommand || process.env.AGON_SIGNER_COMMAND;
+  const signerCommand = args.signerCommand || process.env.RYVO_SIGNER_COMMAND;
   if (!signerCommand) {
-    throw new Error("Gateway returned 402 Payment Required; agon_gateway_auth_call requires signerCommand or AGON_SIGNER_COMMAND.");
+    throw new Error("Gateway returned 402 Payment Required; ryvo_gateway_auth_call requires signerCommand or RYVO_SIGNER_COMMAND.");
   }
   const authRequest = await prepareAuth(args, firstResponse);
   const signerHeaders = runSignerCommand(signerCommand, authRequest);
@@ -1066,13 +1066,13 @@ async function authCall(args) {
 
 async function callTool(name, args) {
   switch (name) {
-    case "agon_gateway_health":
+    case "ryvo_gateway_health":
       return { content: jsonContent(await fetchGateway(args, "GET", "/healthz")) };
 
-    case "agon_gateway_catalog":
+    case "ryvo_gateway_catalog":
       return { content: jsonContent(await getCatalog(args)) };
 
-    case "agon_gateway_find_route": {
+    case "ryvo_gateway_find_route": {
       const catalog = await getCatalog(args);
       const routes = catalogRoutes(catalog).filter((route) => {
         if (args.provider && route.provider !== args.provider) return false;
@@ -1085,12 +1085,12 @@ async function callTool(name, args) {
       return { content: jsonContent(routes) };
     }
 
-    case "agon_gateway_prepare_solana": {
+    case "ryvo_gateway_prepare_solana": {
       const cluster = routeCluster(args);
       const provider = args.provider || "helius";
       const accessMode = args.accessMode || "exact";
-      const prefix = accessMode === "agon-channel" ? "/v1/agon-channel" : "/v1/x402";
-      const pathValue = accessMode === "agon-channel"
+      const prefix = accessMode === "ryvo-channel" ? "/v1/ryvo-channel" : "/v1/x402";
+      const pathValue = accessMode === "ryvo-channel"
         ? `${prefix}/solana/devnet/${provider}/${args.surface}/${args.method}`
         : `${prefix}/solana/${cluster}/${provider}/${args.surface}/${args.method}`;
       const body = { params: args.params };
@@ -1106,7 +1106,7 @@ async function callTool(name, args) {
       };
     }
 
-    case "agon_gateway_prepare_wallet": {
+    case "ryvo_gateway_prepare_wallet": {
       const cluster = routeCluster(args);
       const accessMode = args.accessMode || "exact";
       const prefix = walletPrefix(cluster, accessMode);
@@ -1140,28 +1140,28 @@ async function callTool(name, args) {
       };
     }
 
-    case "agon_gateway_call":
+    case "ryvo_gateway_call":
       return { content: jsonContent(await fetchGateway(args, args.method, args.path)) };
 
-    case "agon_gateway_prepare_auth":
+    case "ryvo_gateway_prepare_auth":
       return { content: jsonContent(await prepareAuth(args)) };
 
-    case "agon_gateway_complete_siwx": {
+    case "ryvo_gateway_complete_siwx": {
       const { prepareAuth, address, signature, signatureEncoding, chainId } = args;
       if (!prepareAuth) {
-        throw new Error("agon_gateway_complete_siwx requires prepareAuth (JSON from agon_gateway_prepare_auth).");
+        throw new Error("ryvo_gateway_complete_siwx requires prepareAuth (JSON from ryvo_gateway_prepare_auth).");
       }
       return { content: jsonContent(completeSiwx(prepareAuth, { address, signature, signatureEncoding, chainId })) };
     }
 
-    case "agon_gateway_call_with_headers":
+    case "ryvo_gateway_call_with_headers":
       return { content: jsonContent(await fetchGateway(args, args.method, args.path)) };
 
-    case "agon_gateway_auth_call":
+    case "ryvo_gateway_auth_call":
       return { content: jsonContent(await authCall(args)) };
 
-    case "agon_token_quote": {
-      if (!args.assetId) throw new Error("agon_token_quote requires assetId.");
+    case "ryvo_token_quote": {
+      if (!args.assetId) throw new Error("ryvo_token_quote requires assetId.");
       const path = args.mint
         ? `/v1/x402/tokens/assets/${encodeURIComponent(args.assetId)}/variant-market`
         : `/v1/x402/tokens/assets/${encodeURIComponent(args.assetId)}`;
@@ -1176,8 +1176,8 @@ async function callTool(name, args) {
       };
     }
 
-    case "agon_token_resolve": {
-      if (!args.ref) throw new Error("agon_token_resolve requires ref.");
+    case "ryvo_token_resolve": {
+      if (!args.ref) throw new Error("ryvo_token_resolve requires ref.");
       return {
         content: jsonContent(await authCall({
           ...args,
@@ -1188,8 +1188,8 @@ async function callTool(name, args) {
       };
     }
 
-    case "agon_token_chart": {
-      if (!args.assetId) throw new Error("agon_token_chart requires assetId.");
+    case "ryvo_token_chart": {
+      if (!args.assetId) throw new Error("ryvo_token_chart requires assetId.");
       const query = { interval: args.interval || "1D" };
       if (args.from !== undefined) query.from = args.from;
       if (args.to !== undefined) query.to = args.to;
@@ -1203,8 +1203,8 @@ async function callTool(name, args) {
       };
     }
 
-    case "agon_token_search": {
-      if (!args.q) throw new Error("agon_token_search requires q.");
+    case "ryvo_token_search": {
+      if (!args.q) throw new Error("ryvo_token_search requires q.");
       const query = { q: args.q, limit: args.limit ?? 10 };
       return {
         content: jsonContent(await authCall({
@@ -1216,12 +1216,12 @@ async function callTool(name, args) {
       };
     }
 
-    case "agon_token_batch_quote": {
+    case "ryvo_token_batch_quote": {
       if (!Array.isArray(args.mints) || args.mints.length === 0) {
-        throw new Error("agon_token_batch_quote requires a non-empty mints array.");
+        throw new Error("ryvo_token_batch_quote requires a non-empty mints array.");
       }
       if (args.mints.length > 250) {
-        throw new Error("agon_token_batch_quote accepts at most 250 mints.");
+        throw new Error("ryvo_token_batch_quote accepts at most 250 mints.");
       }
       if (args.mints.length <= 50) {
         return {
@@ -1260,7 +1260,7 @@ function llmText() {
     }
   }
 
-  return "Agon Gateway MCP server. Fetch the live route catalog with agon_gateway_catalog.";
+  return "Ryvo Gateway MCP server. Fetch the live route catalog with ryvo_gateway_catalog.";
 }
 
 async function handleRequest(message) {
@@ -1277,7 +1277,7 @@ async function handleRequest(message) {
             resources: { subscribe: false, listChanged: false },
           },
           serverInfo: {
-            name: "agon-gateway-mcp",
+            name: "ryvo-gateway-mcp",
             version: pkg.version,
           },
         });
@@ -1298,9 +1298,9 @@ async function handleRequest(message) {
           resources: [
             {
               uri: LLM_RESOURCE_URI,
-              name: "Agon Gateway llm.txt",
+              name: "Ryvo Gateway llm.txt",
               mimeType: "text/plain",
-              description: "LLM-readable instructions for using Agon Gateway.",
+              description: "LLM-readable instructions for using Ryvo Gateway.",
             },
           ],
         });

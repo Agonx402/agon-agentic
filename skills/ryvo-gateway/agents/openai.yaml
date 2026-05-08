@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ryvo Gateway"
+  short_description: "Use Ryvo Gateway x402, Helius Wallet, and Tokens API routes."
+  default_prompt: "Use this skill when interacting with Ryvo Gateway routes, catalog metadata, x402 exact payment challenges, or SIWX Tokens API authentication."

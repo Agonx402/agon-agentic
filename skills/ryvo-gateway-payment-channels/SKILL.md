@@ -1,21 +1,21 @@
 ---
-name: agon-gateway-payment-channels
+name: ryvo-gateway-payment-channels
 description: |
-  Sub-skill for `accessMode: "agon-channel"` Gateway routes only -- devnet Solana RPC/DAS/Helius
-  Wallet calls authorized by signed cumulative Agon commitments and locked official devnet USDC.
-  Use only when implementing or debugging channel-backed authorization (X-Agon-Request-Id +
-  AGON-COMMITMENT headers, channel locking, settlement bundles, BLS clearing). Does NOT cover
+  Sub-skill for `accessMode: "ryvo-channel"` Gateway routes only -- devnet Solana RPC/DAS/Helius
+  Wallet calls authorized by signed cumulative Ryvo commitments and locked official devnet USDC.
+  Use only when implementing or debugging channel-backed authorization (X-Ryvo-Request-Id +
+  RYVO-COMMITMENT headers, channel locking, settlement bundles, BLS clearing). Does NOT cover
   market data, asset prices, Tokens API SIWX, or mainnet RPC/DAS/Wallet -- those route to the
-  `agon-gateway` skill instead.
+  `ryvo-gateway` skill instead.
 ---
 
-# Agon Gateway Payment Channels
+# Ryvo Gateway Payment Channels
 
 ## Overview
 
-Use this skill for gateway devnet routes with `accessMode: "agon-channel"`. These routes authorize API calls against locked Agon channel collateral and merchant-tracked unsettled cumulative commitments.
+Use this skill for gateway devnet routes with `accessMode: "ryvo-channel"`. These routes authorize API calls against locked Ryvo Channel collateral and merchant-tracked unsettled cumulative commitments.
 
-Tokens SIWX routes stay free/authenticated and do not use payment channels. Mainnet RPC/DAS/Wallet routes also do not use Agon payment channels in v1.
+Tokens SIWX routes stay free/authenticated and do not use payment channels. Mainnet RPC/DAS/Wallet routes also do not use Ryvo payment channels in v1.
 
 ## Token Policy
 
@@ -29,7 +29,7 @@ Never use synthetic stablecoin names for gateway-channel examples.
 
 ## Buyer Agent Flow
 
-1. Fetch `/v1/catalog` and select an `accessMode: "agon-channel"` route.
+1. Fetch `/v1/catalog` and select an `accessMode: "ryvo-channel"` route.
 2. Read route metadata: `priceTokenAmount`, `programId`, `tokenId`, `merchantOwner`, `merchantParticipantId`, `messageDomain`, `tokenMint`.
 3. Initialize participant if needed.
 4. Deposit official devnet USDC.
@@ -39,17 +39,17 @@ Never use synthetic stablecoin names for gateway-channel examples.
 8. Send:
 
 ```text
-X-Agon-Request-Id: <stable idempotency id>
-AGON-COMMITMENT: <base64 JSON commitment envelope>
+X-Ryvo-Request-Id: <stable idempotency id>
+RYVO-COMMITMENT: <base64 JSON commitment envelope>
 ```
 
 The gateway CLI can prepare the route metadata for a channel request:
 
 ```bash
-node agentic/cli/agon-gateway.js auth prepare GET /v1/agon-channel/helius/devnet/wallet/balances/<wallet> --query limit=25 --json
+node agentic/cli/ryvo-gateway.js auth prepare GET /v1/ryvo-channel/helius/devnet/wallet/balances/<wallet> --query limit=25 --json
 ```
 
-For one-command calls, provide a wallet-agnostic auth driver that returns `X-Agon-Request-Id` and `AGON-COMMITMENT`. The driver can use any wallet or custody layer; it does not need to be tied to a specific wallet standard.
+For one-command calls, provide a wallet-agnostic auth driver that returns `X-Ryvo-Request-Id` and `RYVO-COMMITMENT`. The driver can use any wallet or custody layer; it does not need to be tied to a specific wallet standard.
 
 ## Gateway Authorization
 

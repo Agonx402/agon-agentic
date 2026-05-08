@@ -87,8 +87,8 @@ cleanJsonMcp(path.join(home, ".claude.json"));
 cleanJsonMcp(path.join(appData, "Claude", "claude_desktop_config.json"));
 cleanJsonMcp(path.join(appData, "Windsurf", "mcp_config.json"));
 cleanJsonMcp(path.join(home, ".codeium", "windsurf", "mcp_config.json"));
-const agonMcp = path.join(home, ".agon", "mcp.json");
-if (fs.existsSync(agonMcp)) cleanJsonMcp(agonMcp);
+const ryvoMcp = path.join(home, ".ryvo", "mcp.json");
+if (fs.existsSync(ryvoMcp)) cleanJsonMcp(ryvoMcp);
 
 process.stdout.write("\n=== AgentCash MCP (Codex TOML) ===\n");
 cleanCodexToml(path.join(home, ".codex", "config.toml"));

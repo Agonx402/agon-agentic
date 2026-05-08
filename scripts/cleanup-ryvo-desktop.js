@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Remove Agon from this machine: global npm packages, ~/.agon, copied skills,
+ * Remove Ryvo from this machine: global npm packages, ~/.ryvo, copied skills,
  * and MCP registrations in common client configs (Windows + generic paths).
  */
 "use strict";
@@ -13,14 +13,14 @@ const { execSync } = require("node:child_process");
 const home = os.homedir();
 const appData = process.env.APPDATA || path.join(home, "AppData", "Roaming");
 
-const AGON_KEYS = ["agon-gateway", "agon-protocol"];
+const RYVO_KEYS = ["ryvo-gateway", "ryvo-protocol"];
 const NPM_PKGS = [
-  "@agonx402/agentic",
-  "@agonx402/gateway-cli",
-  "@agonx402/gateway-mcp",
-  "@agonx402/protocol-cli",
-  "@agonx402/protocol-mcp",
-  "@agonx402/agent-wallet",
+  "@ryvonetwork/agentic",
+  "@ryvonetwork/gateway-cli",
+  "@ryvonetwork/gateway-mcp",
+  "@ryvonetwork/protocol-cli",
+  "@ryvonetwork/protocol-mcp",
+  "@ryvonetwork/agent-wallet",
 ];
 
 function stripBom(text) {
@@ -42,11 +42,11 @@ function npmLsGlobal() {
 }
 
 function uninstallGlobals() {
-  process.stdout.write("=== npm uninstall @agonx402 globals ===\n");
+  process.stdout.write("=== npm uninstall @ryvonetwork globals ===\n");
   const ls = npmLsGlobal();
   const toRemove = NPM_PKGS.filter((p) => ls.includes(p));
   if (toRemove.length === 0) {
-    process.stdout.write("(no @agonx402 globals)\n\n");
+    process.stdout.write("(no @ryvonetwork globals)\n\n");
     return;
   }
   execSync(`npm uninstall -g ${toRemove.map((s) => JSON.stringify(s)).join(" ")}`, { stdio: "inherit" });
@@ -60,14 +60,14 @@ function rmDir(p) {
   }
 }
 
-function removeAgonHome() {
-  process.stdout.write("=== remove ~/.agon ===\n");
-  rmDir(path.join(home, ".agon"));
+function removeRyvoHome() {
+  process.stdout.write("=== remove ~/.ryvo ===\n");
+  rmDir(path.join(home, ".ryvo"));
   process.stdout.write("\n");
 }
 
 function removeSkills() {
-  process.stdout.write("=== remove agon-* skills ===\n");
+  process.stdout.write("=== Remove Ryvo-* skills ===\n");
   const roots = [
     path.join(home, ".agents", "skills"),
     path.join(home, ".codex", "skills"),
@@ -77,7 +77,7 @@ function removeSkills() {
     if (!fs.existsSync(root)) continue;
     for (const name of fs.readdirSync(root, { withFileTypes: true })) {
       if (!name.isDirectory()) continue;
-      if (name.name.startsWith("agon-")) {
+      if (name.name.startsWith("ryvo-")) {
         rmDir(path.join(root, name.name));
       }
     }
@@ -107,14 +107,14 @@ function cleanJsonMcp(filePath) {
     return;
   }
   let removed = 0;
-  for (const k of AGON_KEYS) {
+  for (const k of RYVO_KEYS) {
     if (j.mcpServers[k]) {
       delete j.mcpServers[k];
       removed += 1;
     }
   }
   if (removed === 0) {
-    process.stdout.write(`[mcp json] no agon keys ${filePath}\n`);
+    process.stdout.write(`[mcp json] no ryvo keys ${filePath}\n`);
     return;
   }
   if (Object.keys(j.mcpServers).length === 0) {
@@ -125,7 +125,7 @@ function cleanJsonMcp(filePath) {
 }
 
 function cleanCodexToml() {
-  process.stdout.write("=== strip Agon MCP from Codex config.toml ===\n");
+  process.stdout.write("=== strip Ryvo MCP from Codex config.toml ===\n");
   const filePath = path.join(home, ".codex", "config.toml");
   if (!fs.existsSync(filePath)) {
     process.stdout.write("(codex config.toml missing)\n\n");
@@ -133,18 +133,18 @@ function cleanCodexToml() {
   }
   let text = fs.readFileSync(filePath, "utf8");
   const before = text;
-  text = stripTomlSection(text, "mcp_servers.agon_gateway");
-  text = stripTomlSection(text, "mcp_servers.agon_protocol");
+  text = stripTomlSection(text, "mcp_servers.ryvo_gateway");
+  text = stripTomlSection(text, "mcp_servers.ryvo_protocol");
   if (text !== before) {
     fs.writeFileSync(filePath, `${text.trimEnd()}\n`);
     process.stdout.write(`cleaned ${filePath}\n\n`);
   } else {
-    process.stdout.write("(no agon mcp blocks in codex config)\n\n");
+    process.stdout.write("(no Ryvo MCP blocks in codex config)\n\n");
   }
 }
 
 function cleanAllMcpJson() {
-  process.stdout.write("=== strip Agon MCP from JSON configs ===\n");
+  process.stdout.write("=== strip Ryvo MCP from JSON configs ===\n");
   const paths = [
     path.join(home, ".cursor", "mcp.json"),
     path.join(home, ".claude.json"),
@@ -162,12 +162,12 @@ function verify() {
   process.stdout.write("=== verify ===\n");
   const ls = npmLsGlobal();
   const left = NPM_PKGS.filter((p) => ls.includes(p));
-  process.stdout.write(`@agonx402 globals left: ${left.length ? left.join(", ") : "none"}\n`);
-  process.stdout.write(`~/.agon exists: ${fs.existsSync(path.join(home, ".agon"))}\n`);
+  process.stdout.write(`@ryvonetwork globals left: ${left.length ? left.join(", ") : "none"}\n`);
+  process.stdout.write(`~/.ryvo exists: ${fs.existsSync(path.join(home, ".ryvo"))}\n`);
 }
 
 uninstallGlobals();
-removeAgonHome();
+removeRyvoHome();
 removeSkills();
 cleanAllMcpJson();
 cleanCodexToml();

@@ -1,6 +1,6 @@
-# Agon Protocol
+# Ryvo Protocol
 
-Agon Protocol is a Solana payment-channel and clearing protocol. Agents should use `@agonx402/sdk` for account derivation, message bytes, commitment verification, headroom math, and settlement preparation.
+Ryvo Protocol is a Solana payment-channel and clearing protocol. Agents should use `@ryvonetwork/sdk` for account derivation, message bytes, commitment verification, headroom math, and settlement preparation.
 
 ## Live devnet
 
@@ -14,7 +14,7 @@ unilateralChannelUnlock: 72 hours
 cooperativeChannelUnlock: immediate
 ```
 
-Resolve official devnet USDC `token_id` from `TokenRegistry`, deployment config, or `AGON_PROTOCOL_DEVNET_USDC_TOKEN_ID`. Do not hardcode demo token IDs or use synthetic stablecoin names.
+Resolve official devnet USDC `token_id` from `TokenRegistry`, deployment config, or `RYVO_PROTOCOL_DEVNET_USDC_TOKEN_ID`. Do not hardcode demo token IDs or use synthetic stablecoin names.
 
 ## Agent guardrails
 
@@ -23,7 +23,7 @@ Resolve official devnet USDC `token_id` from `TokenRegistry`, deployment config,
 - Wallet layers sign and submit prepared transactions/messages.
 - Tokens SIWX routes do not use payment channels.
 - Gateway-channel v1 uses official devnet USDC and bundle settlement.
-- Verify cumulative commitments against exact Agon message bytes.
+- Verify cumulative commitments against exact Ryvo message bytes.
 
 ## Core accounts
 
@@ -48,7 +48,7 @@ Admin and registry:
 Participant:
 
 - `initialize_participant`: create durable participant identity.
-- `register_participant_bls_key`: register one Agon BLS key for clearing rounds; no rotation path yet.
+- `register_participant_bls_key`: register one Ryvo BLS key for clearing rounds; no rotation path yet.
 - `update_inbound_channel_policy`: permissionless, consent-required, or disabled inbound channel creation.
 
 Funds:
@@ -71,18 +71,18 @@ Channels:
 
 Settlement:
 
-- `settle_individual`: settle one signed cumulative `agon-cmt-v5` commitment.
+- `settle_individual`: settle one signed cumulative `ryvo-cmt-v5` commitment.
 - `settle_commitment_bundle`: settle many signed cumulative commitments for one payee; use for gateway request settlement.
-- `settle_clearing_round`: settle an Agon-specific BLS cooperative clearing round; do not use for gateway request settlement v1.
+- `settle_clearing_round`: settle an Ryvo-specific BLS cooperative clearing round; do not use for gateway request settlement v1.
 
 ## SDK usage
 
 ```ts
 import * as anchor from "@coral-xyz/anchor";
 import {
-  AgonClient,
-  AGON_CHAIN_IDS,
-  AGON_PROTOCOL_PROGRAM_ID,
+  RyvoClient,
+  RYVO_CHAIN_IDS,
+  RYVO_PROTOCOL_PROGRAM_ID,
   OFFICIAL_DEVNET_USDC_MINT,
   buildGatewayCommitmentPayload,
   calculateChannelHeadroom,
@@ -96,10 +96,10 @@ import {
   prepareCommitmentBundleSettlementPlan,
   resolveCanonicalDevnetUsdcToken,
   verifyGatewayCommitmentEnvelope,
-} from "@agonx402/sdk";
+} from "@ryvonetwork/sdk";
 
 const provider = anchor.AnchorProvider.env();
-const client = new AgonClient({ provider, programId: AGON_PROTOCOL_PROGRAM_ID });
+const client = new RyvoClient({ provider, programId: RYVO_PROTOCOL_PROGRAM_ID });
 ```
 
 Read:
@@ -112,7 +112,7 @@ const channel = await client.fetchChannel({ channelState });
 const usdc = resolveCanonicalDevnetUsdcToken({ registry, env: process.env });
 ```
 
-Prepare common transactions with `AgonClient` or with the read-only `agon_protocol_prepare_action` MCP tool / `agon-protocol prepare <flow>` CLI command:
+Prepare common transactions with `RyvoClient` or with the read-only `ryvo_protocol_prepare_action` MCP tool / `ryvo-protocol prepare <flow>` CLI command:
 
 - `initializeParticipant`
 - `createChannel`
@@ -134,22 +134,22 @@ Use `client.program.methods.<instructionName>(...)` for generated IDL methods no
 
 Protocol MCP tools:
 
-- `agon_protocol_config`
-- `agon_protocol_token`
-- `agon_protocol_participant`
-- `agon_protocol_channel`
-- `agon_protocol_headroom`
-- `agon_protocol_clearing_preview`
-- `agon_protocol_prepare_action`
-- `agon_protocol_prepare_gateway_commitment`
-- `agon_protocol_verify_gateway_commitment`
+- `ryvo_protocol_config`
+- `ryvo_protocol_token`
+- `ryvo_protocol_participant`
+- `ryvo_protocol_channel`
+- `ryvo_protocol_headroom`
+- `ryvo_protocol_clearing_preview`
+- `ryvo_protocol_prepare_action`
+- `ryvo_protocol_prepare_gateway_commitment`
+- `ryvo_protocol_verify_gateway_commitment`
 
 ## Cumulative commitments
 
-`agon-cmt-v5` is cumulative. A commitment for amount `X` means the channel is authorized up to total `X`, not that `X` should be paid again.
+`ryvo-cmt-v5` is cumulative. A commitment for amount `X` means the channel is authorized up to total `X`, not that `X` should be paid again.
 
 ```ts
-const messageDomain = deriveMessageDomain(client.programId, AGON_CHAIN_IDS.devnet);
+const messageDomain = deriveMessageDomain(client.programId, RYVO_CHAIN_IDS.devnet);
 const channel = await client.fetchChannel({ channelState });
 const committedAmount = nextCommitmentAmount(channel, routePriceTokenAmount);
 
@@ -177,14 +177,14 @@ remainingHeadroom = max(0, maxAuthorized - latestAcceptedCommitted)
 Gateway request contract:
 
 ```text
-X-Agon-Request-Id: <stable idempotency key>
-AGON-COMMITMENT: <base64 JSON envelope>
+X-Ryvo-Request-Id: <stable idempotency key>
+Ryvo-COMMITMENT: <base64 JSON envelope>
 ```
 
 The new cumulative amount must equal `latestAcceptedCommitted + priceTokenAmount` and must not exceed `settledCumulative + effectiveLocked`.
 
 ## BLS caveats
 
-Agon BLS v1 is Agon-specific, not a generic IETF hash-to-curve BLS ciphersuite. Clients must use shared Agon implementation and test vectors.
+Ryvo BLS v1 is Ryvo-specific, not a generic IETF hash-to-curve BLS ciphersuite. Clients must use shared Ryvo implementation and test vectors.
 
 There is no BLS key rotation path yet. If a BLS key is lost or compromised, migrate to a new participant identity for future BLS clearing.
